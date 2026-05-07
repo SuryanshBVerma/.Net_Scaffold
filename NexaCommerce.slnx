@@ -1,4 +1,8 @@
 <Solution>
+  <Folder Name="/aspire/" />
+  <Folder Name="/aspire/app-host/">
+    <Project Path="aspire/app-host/NexaCommerce.AppHost.csproj" />
+  </Folder>
   <Folder Name="/backend/" />
   <Folder Name="/backend/shared-kernel/">
     <Project Path="backend/shared-kernel/NexaCommerce.SharedKernel/NexaCommerce.SharedKernel.csproj" />

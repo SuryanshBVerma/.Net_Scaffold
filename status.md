@@ -18,7 +18,7 @@
 |---|-------|--------|--------|-------|
 | 1 | Repo Foundation (global.json, CPM, NuGet.Config) | ✅ Complete | `chore: initialise solution...` | ✅ Build succeeded |
 | 2 | Shared Kernel Library | ✅ Complete | `feat(shared-kernel): add SharedKernel...` | ✅ Build succeeded |
-| 3 | Aspire AppHost (all 3 resource modes) | ❌ | — | — |
+| 3 | Aspire AppHost (all 3 resource modes) | ✅ Complete | `feat(aspire): add AppHost...` | ✅ Build succeeded |
 | 4 | ProductCatalog Web API (EF Core, LINQ, FastEndpoints, Wolverine, MinIO) | ❌ | — | — |
 | 5 | Notifications Worker (Wolverine local transport) | ❌ | — | — |
 | 6 | ReportScheduler + RabbitMQ Transport Upgrade | ❌ | — | — |
@@ -80,7 +80,7 @@ dotnet build NexaCommerce.slnx --no-restore
 2. **Built from .csproj source** — ProductCatalog, Notifications, ReportScheduler (services you own)
 3. **Local npm process** — nexacommerce-ui frontend (non-.NET you own)
 
-**Result:** ❌ Not started
+**Result:** ✅ `Build succeeded` — 13.6s, 0 errors, 0 warnings. Mode 2 and 3 blocks present but commented; activate per phase.
 
 ---
 

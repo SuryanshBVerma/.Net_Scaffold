@@ -1,0 +1,81 @@
+<!--
+  NexaCommerce.AppHost
+  ─────────────────────
+  The Aspire orchestration host — the single entry point to boot the entire stack.
+  Running `dotnet run` here starts every service, database, and broker.
+
+  LEARNING: Sdk="Aspire.AppHost.Sdk" is a special MSBuild SDK that:
+    1. Generates the strongly-typed Projects.* types for each <ProjectReference>
+       (so you get compile-time safety when wiring services).
+    2. Adds the Aspire dashboard and service discovery infrastructure.
+    3. Makes this project the orchestration host — it never serves HTTP itself.
+
+  The SDK version comes from global.json → msbuild-sdks → Aspire.AppHost.Sdk.
+  No Version attribute needed here.
+-->
+<Project Sdk="Aspire.AppHost.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!--
+      IsAspireHost=true tells tooling (Visual Studio, Rider, `dotnet run`)
+      that this is the Aspire orchestration project — not a regular web app.
+    -->
+    <IsAspireHost>true</IsAspireHost>
+    <UserSecretsId>nexa-commerce-apphost-secrets</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      MODE 1 PACKAGES — Pre-built Docker images.
+      These packages provide the builder extension methods:
+        AddPostgres(), AddRabbitMQ(), AddNpmApp(), etc.
+      The actual Docker images are pulled at runtime by the Aspire host.
+    -->
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" />
+    <PackageReference Include="Aspire.Hosting.RabbitMQ" />
+    <PackageReference Include="Aspire.Hosting.JavaScript" />
+  </ItemGroup>
+
+  <!--
+    MODE 2 PROJECT REFERENCES — Services built from source.
+    These are added as each service is built in later phases.
+    Uncomment each block as the corresponding phase is completed.
+
+    LEARNING: Each ProjectReference with no IsAspireProjectResource attribute
+    (or IsAspireProjectResource="true") is compiled and managed by Aspire.
+    Aspire generates Projects.NexaCommerce_ProductCatalog from the reference,
+    enabling type-safe AddProject<Projects.NexaCommerce_ProductCatalog>() calls.
+  -->
+
+  <!-- Phase 4: ProductCatalog web API -->
+  <!--
+  <ItemGroup>
+    <ProjectReference Include="..\..\backend\product-catalog\NexaCommerce.ProductCatalog\NexaCommerce.ProductCatalog.csproj" />
+  </ItemGroup>
+  -->
+
+  <!-- Phase 5: Notifications worker -->
+  <!--
+  <ItemGroup>
+    <ProjectReference Include="..\..\backend\notifications\NexaCommerce.Notifications\NexaCommerce.Notifications.csproj" />
+  </ItemGroup>
+  -->
+
+  <!-- Phase 6: ReportScheduler worker -->
+  <!--
+  <ItemGroup>
+    <ProjectReference Include="..\..\backend\report-scheduler\NexaCommerce.ReportScheduler\NexaCommerce.ReportScheduler.csproj" />
+  </ItemGroup>
+  -->
+
+  <ItemGroup>
+    <Content Update="appsettings.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>
