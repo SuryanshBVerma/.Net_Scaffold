@@ -92,8 +92,7 @@ var minio = builder.AddContainer("minio", "minio/minio", "RELEASE.2025-04-22T22-
 //   opts.UseRabbitMq(rabbitMqConnectionString)
 // That single line is the only code change to switch transports.
 var rabbitMq = builder.AddRabbitMQ("rabbitmq")
-    .WithImage("rabbitmq", "4-management-alpine")
-    .WithManagementPlugin()
+    .WithManagementPlugin()             // Uses rabbitmq:*-management image automatically.
     .WithDataVolume("nexa-rabbitmq-data");
 
 // ── Traefik (Reverse Proxy) ───────────────────────────────────────────────────
