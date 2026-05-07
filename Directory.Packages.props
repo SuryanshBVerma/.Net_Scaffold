@@ -1,0 +1,201 @@
+<!--
+  Directory.Packages.props
+  ─────────────────────────
+  Central Package Management (CPM) — every NuGet package version lives here.
+  Individual .csproj files use <PackageReference Include="..." /> with NO
+  Version attribute. MSBuild resolves the version from this file.
+
+  LEARNING: Without CPM, version conflicts creep in silently across projects.
+  With CPM, bumping a package version is a one-line change in this file,
+  guaranteed to apply everywhere. It also surfaces conflicts at restore time
+  rather than at runtime.
+
+  Rule: NEVER add a Version="..." attribute in a .csproj PackageReference.
+  If a template generates one, remove it.
+-->
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+
+    <!-- ── Aspire Hosting ──────────────────────────────────────────── -->
+    <!--
+      These are only referenced by NexaCommerce.AppHost (the Aspire host).
+      They provide builder extensions: AddPostgres(), AddRabbitMQ(), etc.
+      The Sdk itself (Aspire.AppHost.Sdk 13.2.0) is declared in global.json.
+    -->
+    <PackageVersion Include="Aspire.Hosting.PostgreSQL"  Version="13.2.0" />
+    <PackageVersion Include="Aspire.Hosting.RabbitMQ"    Version="13.2.0" />
+    <PackageVersion Include="Aspire.Hosting.JavaScript"  Version="13.2.0" />
+
+    <!-- ── Aspire Client Integrations ─────────────────────────────── -->
+    <!--
+      These go in the SERVICE projects (not AppHost). They wire the service
+      to Aspire's configuration injection: connection strings, OTEL, health checks.
+    -->
+    <PackageVersion Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.2.0" />
+
+    <!-- ── Authentication & Security ──────────────────────────────── -->
+    <!--
+      JWT Bearer: validates incoming Authorization: Bearer <token> headers.
+      IUserContext (SharedKernel) reads the validated claims from HttpContext.
+    -->
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.5" />
+    <PackageVersion Include="System.IdentityModel.Tokens.Jwt"               Version="8.17.0" />
+
+    <!-- ── Entity Framework Core & PostgreSQL ─────────────────────── -->
+    <!--
+      EF Core 10: the ORM. Npgsql is the PostgreSQL provider.
+      Design + Tools are only needed in the Data project for migrations.
+      InMemory is used in unit tests as an in-process database substitute.
+
+      LEARNING:
+      - EF Core translates LINQ to SQL. See ProductService.cs for examples.
+      - .AsNoTracking() on read queries = significant performance gain.
+      - Migrations are versioned snapshots of the schema — always commit them.
+    -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore"          Version="10.0.5" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Abstractions" Version="10.0.5" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational"   Version="10.0.5" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design"       Version="10.0.5" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools"        Version="10.0.5" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory"     Version="10.0.5" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL"      Version="10.0.1" />
+    <PackageVersion Include="Npgsql"                                     Version="10.0.2" />
+
+    <!-- ── Web / HTTP ──────────────────────────────────────────────── -->
+    <!--
+      FastEndpoints: REPR pattern (Request → Endpoint → Response).
+      One class per HTTP operation. Avoids bloated controllers.
+
+      Swagger: auto-generates OpenAPI spec from endpoints.
+      FastEndpoints.Testing: WAF-based integration test helpers.
+    -->
+    <PackageVersion Include="FastEndpoints"         Version="8.1.0" />
+    <PackageVersion Include="FastEndpoints.Swagger" Version="8.1.0" />
+    <PackageVersion Include="FastEndpoints.Testing" Version="8.1.0" />
+
+    <!-- ── Result Pattern & Mapping ───────────────────────────────── -->
+    <!--
+      Ardalis.Result: return Result<T> from services instead of throwing.
+      SendResult() in FastEndpoints maps Result<T> → correct HTTP status.
+
+      Riok.Mapperly: SOURCE-GENERATED mapping. Unlike AutoMapper, errors are
+      compile-time. No reflection at runtime — faster and safer.
+    -->
+    <PackageVersion Include="Ardalis.Result"  Version="10.1.0" />
+    <PackageVersion Include="Riok.Mapperly"   Version="4.3.1"  />
+
+    <!-- ── Resilience & HTTP ───────────────────────────────────────── -->
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.4.0" />
+
+    <!-- ── Wolverine (Messaging Framework) ────────────────────────── -->
+    <!--
+      WolverineFx: messaging framework (like EF Core for messages).
+      - WolverineFx alone: in-process/local transport (Phases 2–5, no broker).
+      - WolverineFx.RabbitMQ: swap transport to RabbitMQ (Phase 6, one line).
+
+      LEARNING: Wolverine discovers message handlers by convention.
+      Any public method named Handle(SomeMessage msg) is registered automatically.
+      The transport swap doesn't change handlers, publishers, or services at all.
+    -->
+    <PackageVersion Include="WolverineFx"          Version="5.24.0" />
+    <PackageVersion Include="WolverineFx.RabbitMQ" Version="5.24.0" />
+
+    <!-- ── Quartz.NET (Job Scheduling) ────────────────────────────── -->
+    <!--
+      Quartz: cron-based job scheduler. Used in ReportScheduler.
+      Quartz.Extensions.Hosting: integrates Quartz with IHostedService.
+
+      LEARNING: Quartz stores job state in a database (PostgreSQL) so jobs
+      survive restarts. Contrast with BackgroundService which is purely in-memory.
+    -->
+    <PackageVersion Include="Quartz"                    Version="3.18.1" />
+    <PackageVersion Include="Quartz.Extensions.Hosting" Version="3.18.1" />
+
+    <!-- ── Object Storage (MinIO / AWS S3) ────────────────────────── -->
+    <!--
+      AWSSDK.S3: the official AWS SDK for S3. Works against MinIO locally
+      (same S3-compatible API) and real AWS S3 in production.
+      Zero code change — only the endpoint URL and credentials differ.
+
+      LEARNING: This is the "hexagonal ports & adapters" pattern applied to
+      storage. The SDK is the adapter; IObjectStorageService is the port.
+    -->
+    <PackageVersion Include="AWSSDK.S3" Version="3.7.402.6" />
+
+    <!-- ── Logging (Serilog) ──────────────────────────────────────── -->
+    <!--
+      Serilog: structured logging. Outputs JSON in production so log
+      aggregators (Seq, Loki, Azure Monitor) can query by field.
+      Serilog.AspNetCore integrates with the ASP.NET Core request pipeline.
+
+      LEARNING: Structured logging means writing:
+        Log.Information("Product {ProductId} created by {UserId}", id, userId)
+      instead of:
+        Log.Information($"Product {id} created by {userId}")
+      The first creates queryable properties; the second is just a string.
+    -->
+    <PackageVersion Include="Serilog.AspNetCore"   Version="9.0.0" />
+    <PackageVersion Include="Serilog.Sinks.Console" Version="6.0.0" />
+
+    <!-- ── OpenTelemetry (Observability) ──────────────────────────── -->
+    <!--
+      OTEL: distributed tracing + metrics. Aspire injects the OTLP endpoint
+      automatically so traces appear in the Aspire dashboard out of the box.
+
+      LEARNING: With distributed tracing you see the full call chain across
+      services — e.g., HTTP request → DB query → message publish — in one view.
+    -->
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting"          Version="1.15.1" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore"  Version="1.15.1" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Http"        Version="1.15.0" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.1" />
+    <PackageVersion Include="OpenTelemetry.Exporter.Console"            Version="1.15.1" />
+
+    <!-- ── Health Checks ──────────────────────────────────────────── -->
+    <!--
+      HealthChecks.UI.Client: formats the /health endpoint response so
+      Kubernetes liveness/readiness probes and Aspire dashboard both understand it.
+    -->
+    <PackageVersion Include="AspNetCore.HealthChecks.UI.Client" Version="9.0.0" />
+
+    <!-- ── Code Analysis (pinned to resolve transitive conflicts) ──── -->
+    <!--
+      WolverineFx and EF Core Design both pull in Roslyn. Pin to a single
+      version to avoid the "type exists in two assemblies" build error.
+    -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.Common"             Version="5.0.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp"             Version="5.0.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.Common"  Version="5.0.0" />
+
+    <!-- ── Testing ────────────────────────────────────────────────── -->
+    <!--
+      xunit.v3: the test framework (modern v3 — parallel by default).
+      Moq: mock framework for unit tests.
+      Shouldly: fluent assertions that produce readable failure messages.
+      Testcontainers: spin up real Docker containers in tests.
+      Playwright: E2E browser automation.
+      Microsoft.AspNetCore.Mvc.Testing: WebApplicationFactory for integration tests.
+    -->
+    <PackageVersion Include="Microsoft.NET.Test.Sdk"              Version="18.3.0"  />
+    <PackageVersion Include="xunit.v3"                            Version="3.2.2"   />
+    <PackageVersion Include="xunit.runner.visualstudio"           Version="3.1.5"   />
+    <PackageVersion Include="coverlet.collector"                  Version="8.0.1"   />
+    <PackageVersion Include="Moq"                                 Version="4.20.72" />
+    <PackageVersion Include="MockQueryable.Moq"                   Version="10.0.5"  />
+    <PackageVersion Include="Shouldly"                            Version="4.3.0"   />
+    <PackageVersion Include="Testcontainers"                      Version="4.11.0"  />
+    <PackageVersion Include="Testcontainers.PostgreSql"           Version="4.11.0"  />
+    <PackageVersion Include="Testcontainers.RabbitMq"             Version="4.11.0"  />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing"    Version="10.0.5"  />
+    <PackageVersion Include="Microsoft.Playwright"                Version="1.52.0"  />
+
+    <!-- ── Tooling ────────────────────────────────────────────────── -->
+    <PackageVersion Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.23.0" />
+    <PackageVersion Include="System.Text.Json"                    Version="10.0.5"  />
+
+  </ItemGroup>
+</Project>

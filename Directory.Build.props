@@ -1,0 +1,81 @@
+<!--
+  Directory.Build.props
+  ─────────────────────
+  Applied automatically to EVERY project in this repo by MSBuild.
+  You never have to repeat these settings in individual .csproj files.
+
+  LEARNING: MSBuild walks up from each .csproj directory until it finds
+  Directory.Build.props. Settings defined here are the baseline for the
+  whole solution — think of it as an "abstract base class" for all projects.
+-->
+<Project>
+
+  <!-- ── Repo-wide defaults ───────────────────────────────────────── -->
+  <PropertyGroup>
+    <!-- Pin all projects to .NET 10 -->
+    <TargetFramework>net10.0</TargetFramework>
+
+    <!-- Nullable reference types: treat unannoted references as non-nullable.
+         This turns the C# type system into a static null-safety checker.
+         Unannotated code that passes null will produce a warning/error. -->
+    <Nullable>enable</Nullable>
+
+    <!-- Inject common using directives globally so you don't repeat
+         "using System; using System.Linq;" in every file. -->
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Always use the latest C# language version available for the SDK -->
+    <LangVersion>latest</LangVersion>
+
+    <!-- Treat warnings as errors in CI (opt-in: set TreatWarningsAsErrors=true
+         in the pipeline or via a build property — not enforced here to keep
+         the developer feedback loop fast during learning.) -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <!-- ── Reproducible NuGet restores (lock files) ─────────────────── -->
+  <PropertyGroup>
+    <!--
+      Generates packages.lock.json next to each .csproj on first restore.
+      Commit these files. In CI, set RestoreLockedMode=true to ensure
+      the resolved graph matches exactly what was committed.
+
+      LEARNING: Without lock files, `dotnet restore` can silently pull a
+      newer transitive dependency and break the build. Lock files prevent this.
+    -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+
+    <!-- If no lock file exists yet, run an unlocked restore (creates it).
+         Once the lock file is committed, CI sets RestoreLockedMode=true. -->
+    <RestoreLockedMode Condition="!Exists('$(MSBuildProjectDirectory)\packages.lock.json')">false</RestoreLockedMode>
+  </PropertyGroup>
+
+  <!-- ── Test project detection ────────────────────────────────────── -->
+  <!--
+    Any project under a "tests" folder is automatically flagged as a test
+    project. This prevents test assemblies from being packaged as NuGet
+    packages and enables test-specific tooling (e.g., code coverage).
+
+    LEARNING: You can add any MSBuild condition here — folder name, project
+    name suffix, etc. This is cleaner than marking each test project manually.
+  -->
+  <PropertyGroup Condition="$([System.Text.RegularExpressions.Regex]::IsMatch(
+      '$(MSBuildProjectDirectory)', '[\\/]tests[\\/]'))">
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!-- ── Debug diagnostics constants ──────────────────────────────── -->
+  <!--
+    Define ENABLE_DIAGNOSTICS for backend projects in Debug configuration.
+    Use #if ENABLE_DIAGNOSTICS to add verbose logging that disappears in
+    Release builds — zero runtime cost in production.
+  -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'
+      And $([System.Text.RegularExpressions.Regex]::IsMatch(
+          '$(MSBuildProjectDirectory)', '[\\/]backend[\\/]'))
+      And !$([System.String]::Copy('$(MSBuildProjectName)').ToLowerInvariant().EndsWith('.tests'))">
+    <DefineConstants>$(DefineConstants);ENABLE_DIAGNOSTICS</DefineConstants>
+  </PropertyGroup>
+
+</Project>
