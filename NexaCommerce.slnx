@@ -1,2 +1,6 @@
 <Solution>
+  <Folder Name="/backend/" />
+  <Folder Name="/backend/shared-kernel/">
+    <Project Path="backend/shared-kernel/NexaCommerce.SharedKernel/NexaCommerce.SharedKernel.csproj" />
+  </Folder>
 </Solution>

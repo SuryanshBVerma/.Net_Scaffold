@@ -149,11 +149,11 @@
       LEARNING: With distributed tracing you see the full call chain across
       services — e.g., HTTP request → DB query → message publish — in one view.
     -->
-    <PackageVersion Include="OpenTelemetry.Extensions.Hosting"          Version="1.15.1" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore"  Version="1.15.1" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.Http"        Version="1.15.0" />
-    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.1" />
-    <PackageVersion Include="OpenTelemetry.Exporter.Console"            Version="1.15.1" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting"          Version="1.15.3" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore"  Version="1.15.2" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Http"        Version="1.15.1" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.3" />
+    <PackageVersion Include="OpenTelemetry.Exporter.Console"            Version="1.15.3" />
 
     <!-- ── Health Checks ──────────────────────────────────────────── -->
     <!--

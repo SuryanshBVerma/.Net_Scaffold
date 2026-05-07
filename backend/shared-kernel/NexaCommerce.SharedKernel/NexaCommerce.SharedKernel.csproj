@@ -1,0 +1,64 @@
+<!--
+  NexaCommerce.SharedKernel
+  ─────────────────────────
+  Convention library consumed by ALL services. Defines:
+    • Typed identity (IUserContext)
+    • Permission-based authorisation attribute + FastEndpoints pre-processor
+    • Correlation ID middleware
+    • Serilog + OpenTelemetry + health check registration helpers
+    • Wolverine messaging extensions (local transport → RabbitMQ in Phase 6)
+    • S3-compatible object storage abstraction (MinIO dev / AWS S3 prod)
+
+  No domain logic lives here — only cross-cutting infrastructure concerns.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!--
+      NOTE: TargetFramework, Nullable, ImplicitUsings, LangVersion are NOT
+      repeated here — they are inherited from Directory.Build.props.
+      This keeps individual .csproj files lean and consistent.
+    -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- FastEndpoints: REPR pattern + pre-processor hooks -->
+    <PackageReference Include="FastEndpoints" />
+    <PackageReference Include="FastEndpoints.Swagger" />
+
+    <!-- JWT bearer validation -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+
+    <!-- Structured logging -->
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Serilog.Sinks.Console" />
+
+    <!-- Distributed tracing + metrics -->
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="OpenTelemetry.Exporter.Console" />
+
+    <!-- Health check UI formatter (Kubernetes + Aspire dashboard) -->
+    <PackageReference Include="AspNetCore.HealthChecks.UI.Client" />
+
+    <!-- Wolverine messaging framework (transport swapped in Phase 6) -->
+    <PackageReference Include="WolverineFx" />
+
+    <!-- S3-compatible object storage (MinIO locally / AWS S3 in prod) -->
+    <PackageReference Include="AWSSDK.S3" />
+
+    <!-- Result<T> return type — no exceptions for business failures -->
+    <PackageReference Include="Ardalis.Result" />
+
+    <!-- EF Core — needed for MigrateDatabase<TDbContext>() extension -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <!-- Relational package required for MigrateAsync() extension method -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+
+  </ItemGroup>
+
+</Project>
+
+
