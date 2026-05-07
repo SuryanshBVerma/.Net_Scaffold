@@ -45,6 +45,7 @@
 
     <!-- Wolverine messaging framework (transport swapped in Phase 6) -->
     <PackageReference Include="WolverineFx" />
+    <PackageReference Include="WolverineFx.RabbitMQ" />
 
     <!-- S3-compatible object storage (MinIO locally / AWS S3 in prod) -->
     <PackageReference Include="AWSSDK.S3" />

@@ -167,12 +167,10 @@ var notifications = builder.AddProject<Projects.NexaCommerce_Notifications>("not
 // ── Phase 6: ReportScheduler worker ──────────────────────────────────────────
 // Also a worker — no HTTP surface, not in Traefik.
 // UNCOMMENT after completing Phase 6.
-/*
 var reportScheduler = builder.AddProject<Projects.NexaCommerce_ReportScheduler>("report-scheduler")
     .WithReference(catalogDb)           // Quartz.NET stores its job state in Postgres
     .WithReference(rabbitMq)            // Publishes ReportReadyEvent via Wolverine
     .WaitFor(catalogDb);
-*/
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODE 3 — Local npm process

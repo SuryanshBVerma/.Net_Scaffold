@@ -13,6 +13,11 @@
     <Project Path="backend/product-catalog/NexaCommerce.ProductCatalog.Tests/NexaCommerce.ProductCatalog.Tests.csproj" />
     <Project Path="backend/product-catalog/NexaCommerce.ProductCatalog/NexaCommerce.ProductCatalog.csproj" />
   </Folder>
+  <Folder Name="/backend/report-scheduler/">
+    <Project Path="backend/report-scheduler/NexaCommerce.ReportScheduler.Data/NexaCommerce.ReportScheduler.Data.csproj" />
+    <Project Path="backend/report-scheduler/NexaCommerce.ReportScheduler.Tests/NexaCommerce.ReportScheduler.Tests.csproj" />
+    <Project Path="backend/report-scheduler/NexaCommerce.ReportScheduler/NexaCommerce.ReportScheduler.csproj" />
+  </Folder>
   <Folder Name="/backend/shared-kernel/">
     <Project Path="backend/shared-kernel/NexaCommerce.SharedKernel/NexaCommerce.SharedKernel.csproj" />
   </Folder>

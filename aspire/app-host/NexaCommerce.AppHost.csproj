@@ -62,11 +62,9 @@
   </ItemGroup>
 
   <!-- Phase 6: ReportScheduler worker -->
-  <!--
   <ItemGroup>
     <ProjectReference Include="..\..\backend\report-scheduler\NexaCommerce.ReportScheduler\NexaCommerce.ReportScheduler.csproj" />
   </ItemGroup>
-  -->
 
   <ItemGroup>
     <Content Update="appsettings.json">
