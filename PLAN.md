@@ -1,14 +1,48 @@
-# MyStack — Enterprise .NET Scaffold Build Plan
+# NexaCommerce — Enterprise .NET Scaffold Build Plan
 
-## Domain: StoreFront Platform
+> **Project name:** NexaCommerce  
+> A fictitious but realistic e-commerce backend. The name is generic enough that every
+> pattern demonstrated here applies to any domain: HR, logistics, finance, etc.
+
+## Domain: Product Management Platform
 
 A generic product management platform. Simple enough to understand immediately,
 rich enough to demonstrate every architectural pattern.
 
 **Services:**
-- `ProductCatalog`  — CRUD web API for products + image uploads (ServiceA equivalent)
-- `Notifications`   — Worker that reacts to product events via messaging (ServiceB equivalent)
+- `ProductCatalog`  — CRUD web API for products + image uploads
+- `Notifications`   — Worker that reacts to product events via messaging
 - `ReportScheduler` — Quartz.NET cron jobs for cleanup and periodic reporting
+
+---
+
+## Architecture Decisions (Read Before Starting)
+
+### ❓ Should all services be wired through Traefik?
+**No.** Only HTTP-facing services get a Traefik route:
+- ✅ `ProductCatalog` — exposes `GET/POST/PUT/DELETE /api/products/**` → gets a route
+- ❌ `Notifications` — worker with no HTTP surface → no Traefik route (correct by design)
+- ❌ `ReportScheduler` — worker with no HTTP surface → no Traefik route (correct by design)
+
+Wiring workers through Traefik is a mistake beginners make. This scaffold makes it
+explicit: workers are invisible to HTTP — they only communicate via the message bus.
+
+### ❓ Can Wolverine replace RabbitMQ?
+**No — they are different layers, not alternatives:**
+
+| Layer | Technology | Analogy |
+|---|---|---|
+| Messaging framework | **Wolverine** | EF Core (the ORM) |
+| Message transport | **RabbitMQ** (or others) | PostgreSQL (the database) |
+
+Wolverine is the framework. It needs a transport to carry messages. Built-in options:
+- `Wolverine` alone → **in-process/local transport** (no broker, messages live in memory)
+- `WolverineFx.RabbitMQ` → RabbitMQ as the durable broker
+- `WolverineFx.AzureServiceBus` → Azure Service Bus
+
+**Learning progression in this scaffold:**
+1. Phases 2–5: Wolverine with **local transport** (zero extra infrastructure, learn the pattern cleanly)
+2. Phase 6+: Add `WolverineFx.RabbitMQ` — **one line change** to swap transport — proves the abstraction
 
 ---
 
@@ -16,18 +50,20 @@ rich enough to demonstrate every architectural pattern.
 
 | Layer | Name |
 |---|---|
-| Solution | `StoreFront.slnx` |
-| Common library | `StoreFront.SharedKernel` |
-| Aspire host | `StoreFront.AppHost` |
-| Service web host | `StoreFront.ProductCatalog` |
-| Service data layer | `StoreFront.ProductCatalog.Data` |
-| Service unit tests | `StoreFront.ProductCatalog.Tests` |
-| Worker host | `StoreFront.Notifications` |
-| Scheduler host | `StoreFront.ReportScheduler` |
-| Scheduler data | `StoreFront.ReportScheduler.Data` |
-| Integration tests | `StoreFront.ProductCatalog.IntegrationTests` |
-| Shared test fixtures | `StoreFront.IntegrationTests.Common` |
-| E2E tests | `StoreFront.E2E.Tests` |
+| Layer | Name |
+|---|---|
+| Solution | `NexaCommerce.slnx` |
+| Common library | `NexaCommerce.SharedKernel` |
+| Aspire host | `NexaCommerce.AppHost` |
+| Service web host | `NexaCommerce.ProductCatalog` |
+| Service data layer | `NexaCommerce.ProductCatalog.Data` |
+| Service unit tests | `NexaCommerce.ProductCatalog.Tests` |
+| Worker host | `NexaCommerce.Notifications` |
+| Scheduler host | `NexaCommerce.ReportScheduler` |
+| Scheduler data | `NexaCommerce.ReportScheduler.Data` |
+| Integration tests | `NexaCommerce.ProductCatalog.IntegrationTests` |
+| Shared test fixtures | `NexaCommerce.IntegrationTests.Common` |
+| E2E tests | `NexaCommerce.E2E.Tests` |
 
 ---
 
@@ -41,13 +77,13 @@ rich enough to demonstrate every architectural pattern.
 
 #### Files created:
 ```
-StoreFront/
+NexaCommerce/
 ├── .gitignore
 ├── global.json                    ← Pin exact .NET SDK version
 ├── Directory.Build.props          ← Nullable, implicit usings, lock files — all projects
 ├── Directory.Packages.props       ← Every NuGet package version in one place (CPM)
 ├── NuGet.Config                   ← nuget.org feed, restore enabled
-└── StoreFront.slnx                ← Solution file
+└── NexaCommerce.slnx              ← Solution file
 ```
 
 #### What to learn here:
@@ -64,8 +100,8 @@ StoreFront/
 
 #### Files created:
 ```
-backend/shared-kernel/StoreFront.SharedKernel/
-├── StoreFront.SharedKernel.csproj
+backend/shared-kernel/NexaCommerce.SharedKernel/
+├── NexaCommerce.SharedKernel.csproj
 ├── GlobalUsings.cs
 │
 ├── Auth/
@@ -81,9 +117,9 @@ backend/shared-kernel/StoreFront.SharedKernel/
 │   └── CorrelationIdMiddleware.cs       ← X-Correlation-Id on every request + log enrichment
 │
 ├── Extensions/
-│   ├── ServiceCollectionExtensions.cs   ← AddStoreFrontDefaults(), AddWebDefaults(), AddFastEndpoints()
-│   ├── ApplicationBuilderExtensions.cs  ← UseStoreFrontDefaults(), UseStoreFrontEndpoints(), MigrateDatabase<T>()
-│   └── MessagingExtensions.cs           ← AddRabbitMQMessaging() — Wolverine + env-scoped queues + inbox/outbox
+│   ├── ServiceCollectionExtensions.cs   ← AddNexaCommerceDefaults(), AddWebDefaults(), AddFastEndpoints()
+│   ├── ApplicationBuilderExtensions.cs  ← UseNexaCommerceDefaults(), UseNexaEndpoints(), MigrateDatabase<T>()
+│   └── MessagingExtensions.cs           ← AddMessaging() — Wolverine local transport (Phase 2) → RabbitMQ (Phase 6)
 │
 └── Storage/
     ├── IObjectStorageService.cs         ← Upload / Download / Delete abstraction
@@ -93,9 +129,9 @@ backend/shared-kernel/StoreFront.SharedKernel/
 #### What to learn here:
 - `IUserContext` — inject typed identity everywhere instead of reading raw `ClaimsPrincipal`
 - `RequirePermissionAttribute` + `PermissionPreProcessor` — permission checks without policy boilerplate
-- `AddStoreFrontDefaults()` — Serilog structured logging + OpenTelemetry traces/metrics + health checks in a single call
+- `AddNexaCommerceDefaults()` — Serilog structured logging + OpenTelemetry traces/metrics + health checks in a single call
 - `MigrateDatabase<T>()` — idempotent EF Core auto-migration on startup
-- `MessagingExtensions` — Wolverine inbox/outbox + env-scoped RabbitMQ queue names
+- `MessagingExtensions` — Wolverine with **local transport first** (no broker), then swap to RabbitMQ transport
 - `IObjectStorageService` — storage abstraction: MinIO locally, AWS S3 in production, no code change
 
 ---
@@ -107,7 +143,7 @@ backend/shared-kernel/StoreFront.SharedKernel/
 #### Files created:
 ```
 aspire/app-host/
-├── StoreFront.AppHost.csproj
+├── NexaCommerce.AppHost.csproj
 ├── appsettings.json         ← image versions, port map
 └── Program.cs               ← THE file to study — all 3 modes shown with comments
 ```
@@ -124,7 +160,7 @@ var traefik   = builder.AddContainer("traefik", "traefik", "v3.3").WithBindMount
 
 **Mode 2 — Built live from .csproj source** (services you own):
 ```csharp
-var catalog = builder.AddProject<Projects.StoreFront_ProductCatalog>("product-catalog")
+var catalog = builder.AddProject<Projects.NexaCommerce_ProductCatalog>("product-catalog")
     .WithReference(catalogDb)
     .WithReference(rabbitMq)
     .WaitFor(catalogDb);
@@ -133,7 +169,7 @@ var catalog = builder.AddProject<Projects.StoreFront_ProductCatalog>("product-ca
 
 **Mode 3 — Local npm process** (non-.NET apps you own):
 ```csharp
-var frontend = builder.AddNpmApp("frontend", "../../frontend/storefront-ui")
+var frontend = builder.AddNpmApp("frontend", "../../frontend/nexacommerce-ui")
     .WithNpmPackageInstallation()
     .WithEnvironment("CATALOG_API_URL", catalog.GetEndpoint("http"))
     .WithHttpEndpoint(port: 4200, env: "PORT");
@@ -150,45 +186,46 @@ var frontend = builder.AddNpmApp("frontend", "../../frontend/storefront-ui")
 
 ### PHASE 4 — ProductCatalog Service (Full Web API)
 **Goal:** Complete web service demonstrating every backend pattern.
-**Git commit:** `feat(product-catalog): add ProductCatalog web API with EF Core, FastEndpoints, Wolverine, and MinIO`
+**Git commit:** `feat(product-catalog): add ProductCatalog web API with EF Core, LINQ, FastEndpoints, Wolverine, and MinIO`
 
 #### Files created:
 ```
 backend/product-catalog/
-├── StoreFront.ProductCatalog/          ← Web host
-│   ├── StoreFront.ProductCatalog.csproj
-│   ├── Program.cs                      ← ~20 line startup using SharedKernel extensions
+├── NexaCommerce.ProductCatalog/          ← Web host
+│   ├── NexaCommerce.ProductCatalog.csproj
+│   ├── Program.cs                        ← ~20 line startup using SharedKernel extensions
 │   ├── appsettings.json
-│   ├── Dockerfile                      ← Multi-stage: SDK build → ASP.NET runtime
+│   ├── Dockerfile                        ← Multi-stage: SDK build → ASP.NET runtime
 │   │
 │   ├── Endpoints/
-│   │   └── ProductEndpoints.cs         ← All product endpoints in REPR pattern
-│   │       ├── GetProductEndpoint      ← GET /api/products/{id}
-│   │       ├── ListProductsEndpoint    ← GET /api/products
-│   │       ├── CreateProductEndpoint   ← POST /api/products  [RequirePermission("products:write")]
-│   │       ├── UpdateProductEndpoint   ← PUT /api/products/{id}
-│   │       ├── DeleteProductEndpoint   ← DELETE /api/products/{id}
+│   │   └── ProductEndpoints.cs           ← All product endpoints in REPR pattern
+│   │       ├── GetProductEndpoint        ← GET /api/products/{id}
+│   │       ├── ListProductsEndpoint      ← GET /api/products?category=&minPrice=&maxPrice=
+│   │       ├── CreateProductEndpoint     ← POST /api/products  [RequirePermission("products:write")]
+│   │       ├── UpdateProductEndpoint     ← PUT /api/products/{id}
+│   │       ├── DeleteProductEndpoint     ← DELETE /api/products/{id}
 │   │       └── UploadProductImageEndpoint ← POST /api/products/{id}/image → MinIO
 │   │
 │   ├── Services/
-│   │   ├── IProductService.cs          ← Returns Result<T> — no exceptions for business failures
-│   │   └── ProductService.cs           ← Business logic: EF Core + Wolverine publish + MinIO upload
+│   │   ├── IProductService.cs            ← Returns Result<T> — no exceptions for business failures
+│   │   └── ProductService.cs             ← Business logic: LINQ queries + Wolverine publish + MinIO upload
 │   │
 │   └── Messaging/
-│       ├── ProductCreatedEvent.cs      ← Published when a product is created
-│       └── ProductDeletedEvent.cs      ← Published when a product is deleted
+│       ├── ProductCreatedEvent.cs        ← Published when a product is created
+│       └── ProductDeletedEvent.cs        ← Published when a product is deleted
 │
-├── StoreFront.ProductCatalog.Data/     ← EF Core layer (owns its own DB schema)
-│   ├── StoreFront.ProductCatalog.Data.csproj
+├── NexaCommerce.ProductCatalog.Data/     ← EF Core layer (owns its own DB schema)
+│   ├── NexaCommerce.ProductCatalog.Data.csproj
 │   ├── CatalogDbContext.cs
 │   ├── Entities/
-│   │   └── Product.cs                  ← Id, Name, Description, Price, ImageKey, CreatedAt
-│   └── Migrations/                     ← EF Core generated migrations
+│   │   ├── Product.cs                    ← Id, Name, Description, Price, Category, ImageKey, CreatedAt
+│   │   └── Category.cs                   ← Id, Name (gives us a join to practice with LINQ)
+│   └── Migrations/                       ← EF Core generated migrations
 │
-└── StoreFront.ProductCatalog.Tests/    ← Unit tests
-    ├── StoreFront.ProductCatalog.Tests.csproj
+└── NexaCommerce.ProductCatalog.Tests/    ← Unit tests
+    ├── NexaCommerce.ProductCatalog.Tests.csproj
     └── Services/
-        └── ProductServiceTests.cs      ← Moq + Shouldly + InMemory EF
+        └── ProductServiceTests.cs        ← Moq + Shouldly + InMemory EF + LINQ assertion patterns
 ```
 
 #### What to learn here:
@@ -200,18 +237,57 @@ backend/product-catalog/
 - **MinIO upload** via `IObjectStorageService` — same code runs against AWS S3 in production
 - `[RequirePermission("products:write")]` — enforced by pre-processor before handler runs
 
+#### LINQ Learning — demonstrated in `ProductService.cs`:
+```csharp
+// Filtering: WHERE clause
+var cheapProducts = await db.Products
+    .Where(p => p.Price < request.MaxPrice && p.Category.Name == request.Category)
+    .ToListAsync(ct);
+
+// Projection: SELECT specific columns (avoids loading full entity)
+var summaries = await db.Products
+    .Select(p => new ProductSummary(p.Id, p.Name, p.Price, p.Category.Name))
+    .ToListAsync(ct);
+
+// Join via navigation property (EF translates to SQL JOIN)
+var withCategory = await db.Products
+    .Include(p => p.Category)
+    .Where(p => p.IsActive)
+    .OrderBy(p => p.Name)
+    .ToListAsync(ct);
+
+// Aggregation: GROUP BY + COUNT
+var countByCategory = await db.Products
+    .GroupBy(p => p.Category.Name)
+    .Select(g => new { Category = g.Key, Count = g.Count(), AvgPrice = g.Average(p => p.Price) })
+    .ToListAsync(ct);
+
+// Pagination: SKIP + TAKE (server-side paging)
+var page = await db.Products
+    .OrderByDescending(p => p.CreatedAt)
+    .Skip((request.Page - 1) * request.PageSize)
+    .Take(request.PageSize)
+    .ToListAsync(ct);
+
+// Any / All / Count
+var hasExpensive = await db.Products.AnyAsync(p => p.Price > 1000, ct);
+var totalCount   = await db.Products.CountAsync(p => p.IsActive, ct);
+```
+
+All queries use `.AsNoTracking()` for read-only paths (performance) and tracked queries for writes.
+
 ---
 
 ### PHASE 5 — Notifications Service (Event-Driven Worker)
 **Goal:** Demonstrate async service-to-service communication with zero HTTP coupling.
-**Git commit:** `feat(notifications): add Notifications worker consuming ProductCatalog events via RabbitMQ`
+**Git commit:** `feat(notifications): add Notifications worker consuming ProductCatalog events via Wolverine`
 
 #### Files created:
 ```
 backend/notifications/
-├── StoreFront.Notifications/
-│   ├── StoreFront.Notifications.csproj
-│   ├── Program.cs                       ← Worker host (no HTTP) — messaging only
+├── NexaCommerce.Notifications/
+│   ├── NexaCommerce.Notifications.csproj
+│   ├── Program.cs                       ← Worker host (no HTTP) — Wolverine local transport
 │   │
 │   ├── Handlers/
 │   │   ├── ProductCreatedHandler.cs     ← Wolverine discovers this by convention
@@ -221,7 +297,7 @@ backend/notifications/
 │       ├── INotificationSender.cs
 │       └── NotificationSender.cs        ← Stub: logs the notification (swap with email/webhook)
 │
-└── StoreFront.Notifications.Tests/
+└── NexaCommerce.Notifications.Tests/
     └── Handlers/
         └── ProductCreatedHandlerTests.cs
 ```
@@ -229,40 +305,66 @@ backend/notifications/
 #### What to learn here:
 - **Worker host** (not a web host) — `Host.CreateApplicationBuilder()`, no HTTP pipeline
 - **Wolverine handler discovery** — `Handle(ProductCreatedEvent)` is found by convention, no registration
+- **Wolverine local transport** — messages flow in-process first; no broker required to learn the pattern
 - **Decoupled services** — Notifications knows nothing about ProductCatalog's internals; only the event contract is shared
 - **Retry + dead-letter** — Wolverine retries failed handlers with exponential backoff automatically
 - Why workers are **not routed through Traefik** — they have no HTTP surface
 
+> ⚡ **Transport swap moment:** In `MessagingExtensions.cs`, changing from local to RabbitMQ transport is:
+> ```csharp
+> // Phase 5 (local — no broker):
+> opts.UseInMemoryTransport();
+>
+> // Phase 6 upgrade (durable — RabbitMQ broker):
+> opts.UseRabbitMq(new Uri(rabbitMqUri)).AutoProvision();
+> ```
+> The handlers, events, and service code do not change at all.
+
 ---
 
-### PHASE 6 — Report Scheduler Service (Quartz.NET)
-**Goal:** Demonstrate scheduled background jobs with persistent state and audit logging.
-**Git commit:** `feat(report-scheduler): add ReportScheduler with Quartz.NET persistent store, cron jobs, and audit log`
+### PHASE 6 — Report Scheduler + RabbitMQ Transport Upgrade
+**Goal:** Demonstrate Quartz.NET scheduling AND upgrade Wolverine to use RabbitMQ as the durable transport.
+**Git commit:** `feat(report-scheduler): add ReportScheduler with Quartz.NET, audit log, and upgrade Wolverine to RabbitMQ transport`
 
 #### Files created:
 ```
 backend/report-scheduler/
-├── StoreFront.ReportScheduler/
-│   ├── StoreFront.ReportScheduler.csproj
+├── NexaCommerce.ReportScheduler/
+│   ├── NexaCommerce.ReportScheduler.csproj
 │   ├── Program.cs                        ← Worker host + Quartz.NET setup
 │   ├── appsettings.json                  ← Cron expressions here, NOT in C# code
 │   │
 │   ├── Jobs/
-│   │   ├── StaleProductCleanupJob.cs     ← Deletes products older than N days + audits
-│   │   └── DailyReportJob.cs            ← Publishes ScheduledReportRequestedEvent via Wolverine
+│   │   ├── StaleProductCleanupJob.cs     ← LINQ: bulk delete products older than N days
+│   │   └── DailyReportJob.cs             ← Publishes ScheduledReportRequestedEvent via Wolverine
 │   │
 │   └── Scheduling/
 │       └── JobRegistration.cs            ← Reads cron from config, registers with Quartz
 │
-├── StoreFront.ReportScheduler.Data/
+├── NexaCommerce.ReportScheduler.Data/
 │   ├── SchedulerDbContext.cs
 │   └── Entities/
 │       └── JobRunLog.cs                  ← Id, JobName, StartedAt, FinishedAt, Succeeded, Details
 │
-└── StoreFront.ReportScheduler.Tests/
+└── NexaCommerce.ReportScheduler.Tests/
     └── Jobs/
         └── StaleProductCleanupJobTests.cs
 ```
+
+#### LINQ Learning — demonstrated in `StaleProductCleanupJob.cs`:
+```csharp
+// Bulk delete with LINQ (EF Core ExecuteDeleteAsync — no entity loading)
+var cutoff = DateTimeOffset.UtcNow.AddDays(-thresholdDays);
+var deleted = await db.JobRunLogs
+    .Where(l => l.StartedAt < cutoff && l.Succeeded)
+    .ExecuteDeleteAsync(ct);
+
+// Bulk update with LINQ (EF Core ExecuteUpdateAsync)
+var flagged = await db.Products
+    .Where(p => p.CreatedAt < cutoff && !p.IsActive)
+    .ExecuteUpdateAsync(s => s.SetProperty(p => p.IsArchived, true), ct);
+```
+Note: `ExecuteDeleteAsync` / `ExecuteUpdateAsync` translate to a single SQL statement — no loading into memory.
 
 #### What to learn here:
 - `IJob` interface with full DI — constructor injection works out of the box
@@ -276,26 +378,34 @@ backend/report-scheduler/
 ---
 
 ### PHASE 7 — Infrastructure (Traefik Reverse Proxy)
-**Goal:** Show how all services are exposed under a single entry point with middleware.
+**Goal:** Show how HTTP services are exposed under a single entry point, and why workers are NOT routed.
 **Git commit:** `feat(infra): add Traefik reverse proxy with static config, dynamic routes, and middleware examples`
 
 #### Files created:
 ```
 Infrastructure/traefik/
 ├── config/
-│   ├── traefik.yml                  ← Static: entry points, dashboard, file provider, log level
+│   ├── traefik.yml                      ← Static: entry points, dashboard, file provider, log level
 │   └── dynamic/
-│       ├── product-catalog.yml      ← Route: /api/products/** → product-catalog:8080
-│       └── middlewares.yml          ← Reusable middleware: rate-limit, strip-prefix, https-redirect
+│       ├── product-catalog.yml          ← ✅ Route: /api/products/** → product-catalog:8080
+│       ├── middlewares.yml              ← Reusable: rate-limit, strip-prefix, https-redirect
+│       └── workers-have-no-routes.yml   ← 📝 Commented file explaining WHY workers are excluded
 └── plugins/
-    └── README.md                    ← Explains WASM plugin pattern for future custom middleware
+    └── README.md                        ← WASM plugin pattern for future custom middleware
 ```
 
 #### What to learn here:
 - **Static vs Dynamic config** — static needs restart; dynamic reloads live (file watcher)
-- Route-per-service pattern — each service gets its own dynamic config file
-- **Reusable middleware** defined once, referenced by multiple routers
-- Why workers (Notifications, ReportScheduler) have **no Traefik route** — they're invisible to HTTP
+- **Route-per-service** — each HTTP service gets its own dynamic config file; add a service = add a file
+- **Reusable middleware** — defined once in `middlewares.yml`, referenced by name in any router
+- **Workers have no route** — `Notifications` and `ReportScheduler` are invisible to Traefik by design
+
+#### Traefik routing table for this scaffold:
+| Service | Has Traefik Route? | Why |
+|---|---|---|
+| `ProductCatalog` | ✅ Yes | Exposes HTTP API consumed by frontend and external clients |
+| `Notifications` | ❌ No | Worker — only receives messages from RabbitMQ, no HTTP surface |
+| `ReportScheduler` | ❌ No | Worker — only sends messages and runs cron jobs, no HTTP surface |
 
 ---
 
@@ -307,27 +417,48 @@ Infrastructure/traefik/
 ```
 tests/
 ├── common/
-│   └── StoreFront.IntegrationTests.Common/
+│   └── NexaCommerce.IntegrationTests.Common/
 │       └── Fixtures/
 │           ├── PostgreSqlFixture.cs    ← IAsyncLifetime: real PG container via Testcontainers
 │           └── MinioFixture.cs         ← IAsyncLifetime: real MinIO container
 │
 ├── integration/
-│   └── StoreFront.ProductCatalog.IntegrationTests/
-│       ├── CatalogDbContextTests.cs    ← Tests against real PostgreSQL
+│   └── NexaCommerce.ProductCatalog.IntegrationTests/
+│       ├── CatalogDbContextTests.cs    ← LINQ queries tested against real PostgreSQL
 │       └── ProductCatalogApiTests.cs   ← WebApplicationFactory + real DB
 │
 └── e2e/
-    └── StoreFront.E2E.Tests/
+    └── NexaCommerce.E2E.Tests/
         └── SmokeTests.cs               ← Playwright: frontend loads, /health returns 200
 ```
 
 #### What to learn here:
 - **Unit tests** — Moq for dependencies, `Shouldly` for assertions, InMemory EF for DB queries
 - **Testcontainers** — `IClassFixture<PostgreSqlFixture>` starts a real Docker container per test class
-- Why **not to mock EF Core** in integration tests — real Npgsql catches SQL translation bugs
+- Why **not to mock EF Core** in integration tests — real Npgsql catches SQL translation bugs that InMemory misses
+- **LINQ in tests** — asserting query results: `.ShouldContain()`, `.ShouldAllBe()`, `.Count().ShouldBe()`
 - **WebApplicationFactory** — boots the real `Program.cs` in test mode
 - **Playwright** — headless Chromium, reads `BASE_URL` env var so CI can point at real stack
+
+#### LINQ in tests — what `CatalogDbContextTests.cs` covers:
+```csharp
+// Test: filtering works correctly
+var results = await db.Products.Where(p => p.Price < 50).ToListAsync();
+results.ShouldAllBe(p => p.Price < 50);
+
+// Test: ordering is applied
+var ordered = await db.Products.OrderBy(p => p.Name).ToListAsync();
+ordered.Select(p => p.Name).ShouldBe(ordered.Select(p => p.Name).OrderBy(x => x));
+
+// Test: pagination returns correct slice
+var page2 = await db.Products.OrderBy(p => p.Id).Skip(10).Take(5).ToListAsync();
+page2.Count.ShouldBe(5);
+
+// Test: GroupBy aggregation
+var groups = await db.Products.GroupBy(p => p.Category.Name)
+    .Select(g => new { g.Key, Count = g.Count() }).ToListAsync();
+groups.ShouldContain(g => g.Key == "Electronics" && g.Count > 0);
+```
 
 ---
 
@@ -337,8 +468,8 @@ tests/
 
 #### Files created:
 ```
-backend/product-catalog/StoreFront.ProductCatalog/Dockerfile   ← Multi-stage: SDK → runtime
-backend/report-scheduler/StoreFront.ReportScheduler/Dockerfile
+backend/product-catalog/NexaCommerce.ProductCatalog/Dockerfile   ← Multi-stage: SDK → runtime
+backend/report-scheduler/NexaCommerce.ReportScheduler/Dockerfile
 docker-compose.yml                ← Service definitions (what runs)
 docker-compose.override.yml       ← Dev env vars (how it's configured locally)
 ```
@@ -384,7 +515,7 @@ pipelines/
 
 #### Files created:
 ```
-frontend/storefront-ui/
+frontend/nexacommerce-ui/
 ├── package.json       ← scripts: start, build, test, lint
 └── README.md          ← How Aspire injects CATALOG_API_URL and how Angular reads it
 ```
@@ -417,12 +548,14 @@ frontend/storefront-ui/
 | Aspire 9 | Local dev orchestration | docker-compose only (worse DX) |
 | FastEndpoints | HTTP API (REPR pattern) | ASP.NET Controllers (too much boilerplate) |
 | Ardalis.Result | Typed success/failure | Exceptions for flow control (anti-pattern) |
-| Wolverine | Async messaging + inbox/outbox | MassTransit (heavier), raw RabbitMQ (no outbox) |
+| **LINQ** | Data querying (filter, project, group, page) | Raw SQL strings (not type-safe) |
+| Wolverine | Messaging framework (local → RabbitMQ transport) | MassTransit (heavier), raw RabbitMQ (no outbox) |
+| RabbitMQ | Message broker (Wolverine's durable transport) | Azure Service Bus (cloud-only), Kafka (overkill) |
 | Quartz.NET | Cron job scheduling | Hangfire (needs SQL Server), Azure Functions (cloud-only) |
 | Riok.Mapperly | Compile-time object mapping | AutoMapper (reflection, runtime errors) |
 | EF Core + Npgsql | ORM + PostgreSQL | Dapper (no migrations), SQL Server (not open-source) |
 | MinIO | Object storage (S3-compatible) | Azurite (Azure-only API, no web UI) |
-| Traefik | Reverse proxy | Nginx (no live config reload), YARP (in-process only) |
+| Traefik | Reverse proxy (HTTP services only) | Nginx (no live config reload), YARP (in-process only) |
 | Serilog | Structured logging | Microsoft.Extensions.Logging only (no enrichers) |
 | OpenTelemetry | Traces + metrics | Proprietary SDK (vendor lock-in) |
 | Testcontainers | Real infra in tests | Mocking EF Core (misses SQL bugs) |
