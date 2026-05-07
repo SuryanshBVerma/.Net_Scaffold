@@ -4,6 +4,10 @@
     <Project Path="aspire/app-host/NexaCommerce.AppHost.csproj" />
   </Folder>
   <Folder Name="/backend/" />
+  <Folder Name="/backend/notifications/">
+    <Project Path="backend/notifications/NexaCommerce.Notifications.Tests/NexaCommerce.Notifications.Tests.csproj" />
+    <Project Path="backend/notifications/NexaCommerce.Notifications/NexaCommerce.Notifications.csproj" />
+  </Folder>
   <Folder Name="/backend/product-catalog/">
     <Project Path="backend/product-catalog/NexaCommerce.ProductCatalog.Data/NexaCommerce.ProductCatalog.Data.csproj" />
     <Project Path="backend/product-catalog/NexaCommerce.ProductCatalog.Tests/NexaCommerce.ProductCatalog.Tests.csproj" />

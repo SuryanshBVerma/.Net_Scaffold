@@ -52,18 +52,14 @@
   -->
 
   <!-- Phase 4: ProductCatalog web API -->
-  <!--
   <ItemGroup>
     <ProjectReference Include="..\..\backend\product-catalog\NexaCommerce.ProductCatalog\NexaCommerce.ProductCatalog.csproj" />
   </ItemGroup>
-  -->
 
   <!-- Phase 5: Notifications worker -->
-  <!--
   <ItemGroup>
     <ProjectReference Include="..\..\backend\notifications\NexaCommerce.Notifications\NexaCommerce.Notifications.csproj" />
   </ItemGroup>
-  -->
 
   <!-- Phase 6: ReportScheduler worker -->
   <!--

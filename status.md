@@ -20,7 +20,7 @@
 | 2 | Shared Kernel Library | ✅ Complete | `feat(shared-kernel): add SharedKernel...` | ✅ Build succeeded |
 | 3 | Aspire AppHost (all 3 resource modes) | ✅ Complete | `feat(aspire): add AppHost...` | ✅ Build succeeded |
 | 4 | ProductCatalog Web API (EF Core, LINQ, FastEndpoints, Wolverine, MinIO) | ✅ Complete | `feat(product-catalog): ...` | ✅ 13/13 tests passed |
-| 5 | Notifications Worker (Wolverine local transport) | ❌ | — | — |
+| 5 | Notifications Worker (Wolverine local transport) | ✅ Complete | `feat(notifications): ...` | ✅ 6/6 tests passed |
 | 6 | ReportScheduler + RabbitMQ Transport Upgrade | ❌ | — | — |
 | 7 | Traefik Reverse Proxy | ❌ | — | — |
 | 8 | Tests (Unit + Testcontainers + Playwright E2E) | ❌ | — | — |

@@ -150,23 +150,19 @@ var traefik = builder.AddContainer("traefik", "traefik", "v3.3")
 
 // ── Phase 4: ProductCatalog web API ──────────────────────────────────────────
 // UNCOMMENT after completing Phase 4 and adding the ProjectReference in .csproj.
-/*
 var catalogApi = builder.AddProject<Projects.NexaCommerce_ProductCatalog>("product-catalog")
     .WithReference(catalogDb)           // → ConnectionStrings__catalog-db
     .WithReference(rabbitMq)            // → ConnectionStrings__rabbitmq (Phase 6)
     .WithEnvironment("Storage__ServiceUrl", minio.GetEndpoint("s3-api"))
     .WaitFor(catalogDb);                // Wait for Postgres to be healthy first.
-*/
 
 // ── Phase 5: Notifications worker ────────────────────────────────────────────
 // Workers have no HTTP surface — they are NOT exposed through Traefik.
 // UNCOMMENT after completing Phase 5.
-/*
 var notifications = builder.AddProject<Projects.NexaCommerce_Notifications>("notifications")
     .WithReference(rabbitMq)            // Wolverine reads events from RabbitMQ (Phase 6+)
     .WithReference(catalogDb)           // Reads product data for notification content
     .WaitFor(catalogApi);
-*/
 
 // ── Phase 6: ReportScheduler worker ──────────────────────────────────────────
 // Also a worker — no HTTP surface, not in Traefik.

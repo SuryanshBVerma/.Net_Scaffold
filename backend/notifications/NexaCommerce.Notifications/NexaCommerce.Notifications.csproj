@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-NexaCommerce.Notifications-ffa4f45d-89fa-4997-8121-a2e525fbe89d</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="WolverineFx" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\shared-kernel\NexaCommerce.SharedKernel\NexaCommerce.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\product-catalog\NexaCommerce.ProductCatalog.Data\NexaCommerce.ProductCatalog.Data.csproj" />
+  </ItemGroup>
+
+</Project>
+
