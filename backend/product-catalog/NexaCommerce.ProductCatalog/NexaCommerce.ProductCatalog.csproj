@@ -1,0 +1,33 @@
+<!--
+  NexaCommerce.ProductCatalog — Web Host
+  ────────────────────────────────────────
+  ASP.NET Core web API. Exposes product CRUD via FastEndpoints (REPR pattern).
+  Uses SharedKernel for auth, logging, OTEL, and messaging.
+  Program.cs is ~20 lines — all complexity lives in SharedKernel extensions.
+-->
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <!-- TargetFramework, Nullable, ImplicitUsings inherited from Directory.Build.props -->
+    <UserSecretsId>nexa-commerce-product-catalog-secrets</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- SharedKernel: auth, logging, OTEL, Wolverine, FastEndpoints, MinIO -->
+    <ProjectReference Include="..\NexaCommerce.ProductCatalog.Data\NexaCommerce.ProductCatalog.Data.csproj" />
+    <ProjectReference Include="..\..\..\backend\shared-kernel\NexaCommerce.SharedKernel\NexaCommerce.SharedKernel.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Aspire client integration: reads ConnectionStrings__catalog-db injected by Aspire,
+      configures CatalogDbContext with it, and registers health checks automatically.
+    -->
+    <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" />
+
+    <!-- Compile-time source-generated object mapping (no reflection, errors at build) -->
+    <PackageReference Include="Riok.Mapperly" />
+  </ItemGroup>
+
+</Project>
+

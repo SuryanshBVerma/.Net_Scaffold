@@ -1,0 +1,36 @@
+<!--
+  NexaCommerce.ProductCatalog.Tests — Unit Tests
+  ────────────────────────────────────────────────
+  Tests ProductService in isolation using:
+    • EF Core InMemory provider — real LINQ queries, no database needed
+    • Moq — mock IMessageBus and IObjectStorageService
+    • Shouldly — fluent assertions with readable failure messages
+
+  LEARNING: InMemory provider is NOT a real database. It does not support:
+    • SQL functions (LIKE, date functions, etc.)
+    • Transactions
+    • Unique constraint enforcement
+  Use it for unit tests only. Use Testcontainers for integration tests (Phase 8).
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- IsTestProject=true is set by Directory.Build.props based on folder path -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Moq" />
+    <PackageReference Include="Shouldly" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NexaCommerce.ProductCatalog\NexaCommerce.ProductCatalog.csproj" />
+    <ProjectReference Include="..\NexaCommerce.ProductCatalog.Data\NexaCommerce.ProductCatalog.Data.csproj" />
+  </ItemGroup>
+
+</Project>

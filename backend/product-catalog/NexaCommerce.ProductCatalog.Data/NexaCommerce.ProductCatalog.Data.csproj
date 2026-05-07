@@ -1,0 +1,36 @@
+<!--
+  NexaCommerce.ProductCatalog.Data
+  ─────────────────────────────────
+  EF Core data layer. Owns the database schema for the ProductCatalog bounded context.
+
+  LEARNING — Vertical slice data ownership:
+    Each service owns its own tables. ProductCatalog.Data only contains catalog
+    tables. This prevents the "shared database anti-pattern" where all services
+    couple to one mega-schema and any schema change breaks everyone.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- TargetFramework, Nullable, ImplicitUsings inherited from Directory.Build.props -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <!--
+      Design + Tools: CLI tooling for `dotnet ef migrations add` / `dotnet ef database update`.
+      PrivateAssets=all means these are NOT included in the published output.
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>
+
