@@ -113,29 +113,25 @@ var rabbitMq = builder.AddRabbitMQ("rabbitmq")
 //
 // Phase 7 adds the Traefik config files to Infrastructure/traefik/.
 var traefik = builder.AddContainer("traefik", "traefik", "v3.3")
-    // LEARNING — CLI args vs static config file:
-    // Entry points and providers can be set via CLI args (simpler for dev)
-    // or in traefik.yml (better for production — version-controlled, reviewable).
-    // We use the static config file here to demonstrate the full pattern.
-    // The args below are left as a reference for quick one-off overrides.
-    //   "--providers.file.directory=/etc/traefik/dynamic",
-    //   "--providers.file.watch=true",
-    //   "--entryPoints.web.address=:80",
-    //   "--api.dashboard=true",
-    //   "--api.insecure=true"
-    .WithBindMount("../../Infrastructure/traefik/config/traefik.yml",
-        "/etc/traefik/traefik.yml", isReadOnly: true)
+    // LEARNING — Static config via CLI args vs config file:
+    // On Windows, Docker Desktop single-file bind mounts (mounting one .yml file)
+    // are unreliable — Docker may refuse to start the container silently, causing
+    // Aspire's DCP watcher to time out. Passing static config as CLI args sidesteps
+    // this entirely. The traefik.yml in Infrastructure/ still documents the full
+    // production config; these args are the equivalent dev-mode settings.
+    .WithArgs(
+        "--providers.file.directory=/etc/traefik/dynamic",
+        "--providers.file.watch=true",      // Hot-reload dynamic config on change
+        "--entryPoints.web.address=:80",
+        "--api.dashboard=true",
+        "--api.insecure=true",              // ⚠ Dev only — no auth on dashboard
+        "--log.level=INFO")
+    // Directory bind mounts are reliable on Windows; only mount the dynamic/ folder.
     .WithBindMount("../../Infrastructure/traefik/config/dynamic",
         "/etc/traefik/dynamic", isReadOnly: true)
-    // LEARNING — host port vs targetPort:
-    //   targetPort: the port Traefik listens on INSIDE the container (always 80).
-    //   port:       the port Docker binds on the HOST machine.
-    //
-    //   Port 80 is almost always taken on Windows (IIS, World Wide Web Publishing
-    //   Service, Skype, etc.). Using a high non-conflicting port on the host avoids
-    //   the bind failure that causes Aspire's DCP to time out.
-    //   → API traffic:  http://localhost:8088/api/products
-    //   → Dashboard:    http://localhost:8081
+    // LEARNING — host port vs targetPort (see comment from Phase 7 fix):
+    //   Port 80 and 8080 are often taken on Windows (IIS, other services).
+    //   targetPort = Traefik's internal listener; port = host binding.
     .WithHttpEndpoint(port: 8088, targetPort: 80,   name: "http")       // API entry point
     .WithHttpEndpoint(port: 8081, targetPort: 8080, name: "dashboard"); // Traefik dashboard
 
