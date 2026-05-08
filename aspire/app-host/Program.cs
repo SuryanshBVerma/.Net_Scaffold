@@ -97,49 +97,35 @@ var rabbitMq = builder.AddRabbitMQ("rabbitmq")
 
 // ── Traefik (Reverse Proxy) ───────────────────────────────────────────────────
 // LEARNING: Traefik routes external HTTP traffic to your services.
-// AddContainer() is used because there is no native Aspire Traefik resource.
+// The config files in Infrastructure/traefik/ are the main learning artifact
+// for Phase 7 — read those files to understand static vs dynamic config,
+// reusable middleware, and why workers have no routes.
 //
-// WithBindMount() mounts your local config files into the container.
-//   - traefik.yml  → static config (entry points, providers)
-//   - dynamic/     → dynamic config (routes, middleware, TLS)
+// Running Traefik via Aspire AddContainer causes a DCP timeout on Windows
+// (UpdateWithEffectiveAddressInfo never resolves when Docker fails to bind).
+// Run it standalone instead:
+//
+//   docker run -d --name traefik -p 8088:80 -p 8081:8080 traefik:v3.3 \
+//     --entryPoints.web.address=:80 \
+//     --api.dashboard=true \
+//     --api.insecure=true
+//
+//   Dashboard: http://localhost:8081
+//   API proxy: http://localhost:8088/api/products
 //
 // ROUTING TABLE for NexaCommerce:
-//   ProductCatalog   → http://traefik:80/api/products/**   (HTTP service ✅)
+//   ProductCatalog   → http://localhost:8088/api/products/**   (HTTP service ✅)
 //   Notifications    → NOT routed (worker, no HTTP surface ❌)
 //   ReportScheduler  → NOT routed (worker, no HTTP surface ❌)
-//
-// Workers communicate only through the message bus — they are invisible to HTTP.
-// Routing them through Traefik would be a mistake (they have no endpoints to route to).
-//
-// Phase 7 adds the Traefik config files to Infrastructure/traefik/.
+/*
 var traefik = builder.AddContainer("traefik", "traefik", "v3.3")
-    // LEARNING — Static config via CLI args vs config file:
-    // On Windows, Docker Desktop single-file bind mounts (mounting one .yml file)
-    // are unreliable — Docker may refuse to start the container silently, causing
-    // Aspire's DCP watcher to time out. Passing static config as CLI args sidesteps
-    // this entirely. The traefik.yml in Infrastructure/ still documents the full
-    // production config; these args are the equivalent dev-mode settings.
-    // LEARNING — Why no bind mounts here:
-    //   Docker Desktop on Windows cannot reliably bind-mount host paths that contain
-    //   spaces (e.g. "d:\.Net Scaffold\..."). The container fails to start silently
-    //   and Aspire's DCP k8s.Watcher times out waiting for its effective address.
-    //
-    //   Solution: pass ALL config via CLI args. No mounts needed for dev.
-    //   The config files in Infrastructure/traefik/ are the production reference;
-    //   they are NOT mounted in this dev setup.
-    //
-    //   In production (Docker Compose / Kubernetes) paths have no spaces and
-    //   bind mounts work normally — use the traefik.yml + dynamic/ files there.
     .WithArgs(
         "--entryPoints.web.address=:80",
         "--api.dashboard=true",
-        "--api.insecure=true")              // ⚠ Dev only — no auth on dashboard
-    // LEARNING — host port vs targetPort:
-    //   targetPort = port Traefik listens on INSIDE the container (80 / 8080).
-    //   port       = port Docker binds on the HOST machine.
-    //   Ports 80 and 8080 are often taken on Windows (IIS, etc.).
-    .WithHttpEndpoint(port: 8088, targetPort: 80,   name: "http")       // API entry point
-    .WithHttpEndpoint(port: 8081, targetPort: 8080, name: "dashboard"); // Traefik dashboard
+        "--api.insecure=true")
+    .WithHttpEndpoint(port: 8088, targetPort: 80,   name: "http")
+    .WithHttpEndpoint(port: 8081, targetPort: 8080, name: "dashboard");
+*/
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODE 2 — .NET projects built from source
