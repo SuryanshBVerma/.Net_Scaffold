@@ -217,6 +217,32 @@ services:
       rabbitmq:
         condition: service_healthy
 
+# ── Frontend (Angular SPA) ────────────────────────────────────────────────────
+# LEARNING — SPA in docker-compose:
+#   The Angular app is pre-built into static files during the Docker build stage.
+#   nginx serves those files and rewrites all routes to index.html (SPA routing).
+#
+#   CATALOG_API_URL is injected at container startup by docker-entrypoint.sh.
+#   It must point to the product-catalog service as seen FROM THE BROWSER,
+#   not from inside the Docker network. In this setup the browser accesses
+#   product-catalog via the Traefik proxy at http://localhost:8088.
+#
+#   In production, point this to your actual API gateway or CDN-fronted endpoint.
+  frontend:
+    build:
+      context: frontend/nexacommerce-ui
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "4200:80"
+    environment:
+      # LEARNING: This URL is what the BROWSER calls — must be reachable from
+      # the end user's machine, not from inside the Docker network.
+      # In dev: browser → localhost:8088 → Traefik → product-catalog:8080
+      CATALOG_API_URL: "http://localhost:8088"
+    depends_on:
+      - product-catalog
+
 # ── Named Volumes ────────────────────────────────────────────────────────────
 # LEARNING: Volumes declared here are managed by Docker and persist across
 # `docker compose down`. Only `docker compose down -v` removes them.

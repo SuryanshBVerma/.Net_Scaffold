@@ -197,13 +197,28 @@ var reportScheduler = builder.AddProject<Projects.NexaCommerce_ReportScheduler>(
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Phase 11: Angular frontend ────────────────────────────────────────────────
-// UNCOMMENT after completing Phase 11.
-/*
-var frontend = builder.AddNpmApp("frontend", "../../frontend/nexacommerce-ui")
-    .WithNpmPackageInstallation()
+// LEARNING — AddJavaScriptApp() is Aspire 13's API for npm-based frontends.
+//   (Earlier previews used AddNpmApp() — renamed in Aspire 9+/13+.)
+//
+//   What Aspire does automatically:
+//     1. WithNpm(install: true) → runs `npm install` if node_modules is absent
+//     2. Runs `npm run start` (prestart hook → generate-env.js → ng serve)
+//     3. Streams stdout/stderr to the Aspire dashboard as structured logs
+//     4. WithEnvironment() injects CATALOG_API_URL → generate-env.js reads it
+//        and writes src/assets/env.js → Angular reads window.__env.CATALOG_API_URL
+//     5. WithHttpEndpoint() → the Angular dev server is visible in the dashboard
+//
+//   The frontend appears in the Aspire dashboard alongside all backend services:
+//   same health status, same log streaming, same distributed trace view.
+var frontend = builder.AddJavaScriptApp("frontend", "../../frontend/nexacommerce-ui", "start")
+    .WithNpm(install: true)
+    // LEARNING — GetEndpoint("http") returns the actual URL (with port) assigned to
+    // product-catalog. Aspire resolves this at startup — no hardcoded URLs anywhere.
     .WithEnvironment("CATALOG_API_URL", catalogApi.GetEndpoint("http"))
-    .WithHttpEndpoint(port: 4200, targetPort: 4200, env: "PORT");
-*/
+    // LEARNING — env: "PORT" tells the dev server which port to listen on.
+    // Aspire sets the PORT env var to 4200 so Angular's ng serve binds there.
+    .WithHttpEndpoint(port: 4200, targetPort: 4200, env: "PORT")
+    .WaitFor(catalogApi);   // Don't start the UI until the API is ready.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Build and run the application
