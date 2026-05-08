@@ -119,19 +119,25 @@ var traefik = builder.AddContainer("traefik", "traefik", "v3.3")
     // Aspire's DCP watcher to time out. Passing static config as CLI args sidesteps
     // this entirely. The traefik.yml in Infrastructure/ still documents the full
     // production config; these args are the equivalent dev-mode settings.
+    // LEARNING — Why no bind mounts here:
+    //   Docker Desktop on Windows cannot reliably bind-mount host paths that contain
+    //   spaces (e.g. "d:\.Net Scaffold\..."). The container fails to start silently
+    //   and Aspire's DCP k8s.Watcher times out waiting for its effective address.
+    //
+    //   Solution: pass ALL config via CLI args. No mounts needed for dev.
+    //   The config files in Infrastructure/traefik/ are the production reference;
+    //   they are NOT mounted in this dev setup.
+    //
+    //   In production (Docker Compose / Kubernetes) paths have no spaces and
+    //   bind mounts work normally — use the traefik.yml + dynamic/ files there.
     .WithArgs(
-        "--providers.file.directory=/etc/traefik/dynamic",
-        "--providers.file.watch=true",      // Hot-reload dynamic config on change
         "--entryPoints.web.address=:80",
         "--api.dashboard=true",
-        "--api.insecure=true",              // ⚠ Dev only — no auth on dashboard
-        "--log.level=INFO")
-    // Directory bind mounts are reliable on Windows; only mount the dynamic/ folder.
-    .WithBindMount("../../Infrastructure/traefik/config/dynamic",
-        "/etc/traefik/dynamic", isReadOnly: true)
-    // LEARNING — host port vs targetPort (see comment from Phase 7 fix):
-    //   Port 80 and 8080 are often taken on Windows (IIS, other services).
-    //   targetPort = Traefik's internal listener; port = host binding.
+        "--api.insecure=true")              // ⚠ Dev only — no auth on dashboard
+    // LEARNING — host port vs targetPort:
+    //   targetPort = port Traefik listens on INSIDE the container (80 / 8080).
+    //   port       = port Docker binds on the HOST machine.
+    //   Ports 80 and 8080 are often taken on Windows (IIS, etc.).
     .WithHttpEndpoint(port: 8088, targetPort: 80,   name: "http")       // API entry point
     .WithHttpEndpoint(port: 8081, targetPort: 8080, name: "dashboard"); // Traefik dashboard
 
