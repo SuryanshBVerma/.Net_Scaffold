@@ -77,8 +77,12 @@ var minio = builder.AddContainer("minio", "minio/minio", "RELEASE.2025-04-22T22-
     .WithVolume("nexa-minio-data", "/data")
     .WithEnvironment("MINIO_ROOT_USER", "minioadmin")
     .WithEnvironment("MINIO_ROOT_PASSWORD", "minioadmin")
-    .WithHttpEndpoint(port: 9000, targetPort: 9000, name: "s3-api")
-    .WithHttpEndpoint(port: 9001, targetPort: 9001, name: "console");
+    // LEARNING — omitting 'port' lets Aspire pick a random host port, avoiding
+    // conflicts with any other process on 9000/9001. The endpoint URL injected
+    // into catalogApi via GetEndpoint("s3-api") always reflects the actual
+    // assigned port. Check the Aspire dashboard to see which port was assigned.
+    .WithHttpEndpoint(targetPort: 9000, name: "s3-api")
+    .WithHttpEndpoint(targetPort: 9001, name: "console");
 
 // ── RabbitMQ ─────────────────────────────────────────────────────────────────
 // LEARNING: RabbitMQ is the message broker used by Wolverine from Phase 6+.
