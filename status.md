@@ -23,7 +23,7 @@
 | 5 | Notifications Worker (Wolverine local transport) | ✅ Complete | `feat(notifications): ...` | ✅ 6/6 tests passed |
 | 6 | ReportScheduler + RabbitMQ Transport Upgrade | ✅ Complete | `feat(report-scheduler): ...` | ✅ 5/5 tests passed |
 | 7 | Traefik Reverse Proxy | ✅ Complete | `feat(infra): add Traefik reverse proxy...` | ✅ Build succeeded |
-| 8 | Tests (Unit + Testcontainers + Playwright E2E) | ❌ | — | — |
+| 8 | Tests (Unit + Testcontainers + Playwright E2E) | ✅ Complete | `test: add unit tests, Testcontainers integration tests, and Playwright E2E smoke tests` | ✅ 24/24 unit tests passed |
 | 9 | Dockerfiles + docker-compose | ❌ | — | — |
 | 10 | Azure DevOps Pipeline Templates | ❌ | — | — |
 | 11 | Frontend Placeholder (nexacommerce-ui) | ❌ | — | — |

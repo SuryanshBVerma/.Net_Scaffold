@@ -21,4 +21,14 @@
   <Folder Name="/backend/shared-kernel/">
     <Project Path="backend/shared-kernel/NexaCommerce.SharedKernel/NexaCommerce.SharedKernel.csproj" />
   </Folder>
+  <Folder Name="/tests/" />
+  <Folder Name="/tests/common/">
+    <Project Path="tests/common/NexaCommerce.IntegrationTests.Common/NexaCommerce.IntegrationTests.Common.csproj" />
+  </Folder>
+  <Folder Name="/tests/e2e/">
+    <Project Path="tests/e2e/NexaCommerce.E2E.Tests/NexaCommerce.E2E.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/integration/">
+    <Project Path="tests/integration/NexaCommerce.ProductCatalog.IntegrationTests/NexaCommerce.ProductCatalog.IntegrationTests.csproj" />
+  </Folder>
 </Solution>
