@@ -1,0 +1,226 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# NexaCommerce — docker-compose.yml
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# LEARNING — docker-compose vs Aspire AppHost:
+#
+#   Aspire AppHost:
+#     • Used by developers with .NET SDK installed
+#     • Hot-reload, OTEL dashboard, automatic port assignment
+#     • Runs .NET services as child processes (not containers)
+#     • NOT a deployment tool
+#
+#   docker-compose.yml (this file):
+#     • Used by CI/CD pipelines, ops teams, staging environments
+#     • Runs EVERYTHING as Docker containers (including .NET services)
+#     • No hot-reload, no Aspire dashboard
+#     • Simple to run: docker compose up -d
+#
+# LEARNING — docker-compose.yml vs docker-compose.override.yml:
+#
+#   docker-compose.yml         → WHAT runs (service definitions, images, ports)
+#                                 Committed to Git. Same in all environments.
+#   docker-compose.override.yml → HOW it's configured locally (env vars, credentials)
+#                                 Committed with safe dev defaults.
+#                                 In production: use secrets manager or CI variables.
+#
+#   Docker Compose automatically merges both files when you run:
+#     docker compose up
+#   To use only the base file (production):
+#     docker compose -f docker-compose.yml up
+#
+# LEARNING — Named volumes vs bind mounts:
+#   Named volumes (postgres-data, minio-data, rabbitmq-data):
+#     • Managed by Docker, survive container restarts and upgrades
+#     • Cannot easily inspect contents from the host
+#     • Use for: databases, message brokers — data you care about persisting
+#   Bind mounts (used in Traefik):
+#     • Maps a host directory into the container
+#     • Changes on host are visible in container immediately
+#     • Use for: config files you want to edit without rebuilding
+#
+# Usage:
+#   Start everything:      docker compose up -d
+#   Start infra only:      docker compose up -d postgres rabbitmq minio traefik
+#   View logs:             docker compose logs -f product-catalog
+#   Stop and remove:       docker compose down
+#   Stop + wipe volumes:   docker compose down -v   ⚠ destroys all data
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+services:
+
+  # ── Infrastructure ──────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:17-alpine
+    # LEARNING — restart: unless-stopped:
+    #   Container restarts automatically after a crash or machine reboot,
+    #   UNLESS you explicitly stopped it with `docker compose stop`.
+    #   Use 'no' in CI (you want containers to stop when the job ends).
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB:       catalog
+    ports:
+      # LEARNING — "host:container" port mapping.
+      # Left side (5432) = port on YOUR machine.
+      # Right side (5432) = port inside the container.
+      # Expose to host only for dev tools (pgAdmin, DBeaver).
+      # Services in the same compose network talk directly: postgres:5432
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # LEARNING — healthcheck:
+      #   Docker marks the container healthy/unhealthy based on this command.
+      #   Other services use 'depends_on: condition: service_healthy' to wait
+      #   for this container to be ready before starting.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d catalog"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    ports:
+      - "5672:5672"    # AMQP protocol (used by Wolverine)
+      - "15672:15672"  # Management UI: http://localhost:15672
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER:     ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Admin console: http://localhost:9001
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  traefik:
+    image: traefik:v3.3
+    restart: unless-stopped
+    # LEARNING — command overrides the Docker CMD/ENTRYPOINT.
+    # Traefik reads these as startup flags (same as passing args to the binary).
+    command:
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
+      - "--entryPoints.web.address=:80"
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      - "--log.level=INFO"
+    ports:
+      - "80:80"      # API entry point (all HTTP traffic)
+      - "8080:8080"  # Traefik dashboard: http://localhost:8080
+    volumes:
+      # LEARNING — Bind mount the dynamic config directory.
+      # In docker-compose, paths are relative to the docker-compose.yml file.
+      # ./Infrastructure/traefik/config/dynamic → /etc/traefik/dynamic inside Traefik.
+      # The 'ro' (read-only) flag prevents Traefik from writing back to host.
+      - ./Infrastructure/traefik/config/dynamic:/etc/traefik/dynamic:ro
+
+  # ── Application Services ────────────────────────────────────────────────────
+
+  product-catalog:
+    # LEARNING — build vs image:
+    #   image:  pull a pre-built image from a registry (infrastructure you don't own)
+    #   build:  build from a Dockerfile (services you own)
+    #
+    #   context: . → repo root as the Docker build context (needed for cross-project COPY)
+    #   dockerfile: → path to the Dockerfile relative to the context
+    build:
+      context: .
+      dockerfile: backend/product-catalog/NexaCommerce.ProductCatalog/Dockerfile
+      args:
+        BUILD_CONFIGURATION: Release
+    restart: unless-stopped
+    environment:
+      # LEARNING — Service-to-service networking in docker-compose:
+      #   Services in the same compose project share a default network.
+      #   They address each other by SERVICE NAME, not by localhost.
+      #   postgres:5432 → the 'postgres' service, container port 5432.
+      #   This is the key difference from local development (localhost:5432).
+      ConnectionStrings__catalog-db: "Host=postgres;Port=5432;Database=catalog;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      ConnectionStrings__rabbitmq:   "amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672"
+      Storage__ServiceUrl:           "http://minio:9000"
+      Storage__AccessKey:            ${MINIO_ROOT_USER}
+      Storage__SecretKey:            ${MINIO_ROOT_PASSWORD}
+      Storage__BucketName:           product-images
+      ASPNETCORE_ENVIRONMENT:        Production
+    ports:
+      - "8081:8080"   # http://localhost:8081/api/products (Traefik proxies via port 80)
+    depends_on:
+      postgres:
+        # LEARNING — depends_on with condition:
+        #   service_healthy → wait for the postgres healthcheck to pass before starting.
+        #   This is more reliable than just 'depends_on: postgres' which only waits
+        #   for the container to START, not for Postgres to be READY to accept connections.
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_started
+
+  notifications:
+    build:
+      context: .
+      # LEARNING — Notifications is a worker (no Dockerfile shown in PLAN for it).
+      # In a real project it would have its own Dockerfile identical in structure
+      # to ReportScheduler's but referencing the Notifications project.
+      # For this scaffold, ReportScheduler's Dockerfile demonstrates the pattern.
+      dockerfile: backend/report-scheduler/NexaCommerce.ReportScheduler/Dockerfile
+    restart: unless-stopped
+    environment:
+      ConnectionStrings__rabbitmq: "amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672"
+      ConnectionStrings__catalog-db: "Host=postgres;Port=5432;Database=catalog;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      DOTNET_ENVIRONMENT: Production
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      product-catalog:
+        condition: service_started
+
+  report-scheduler:
+    build:
+      context: .
+      dockerfile: backend/report-scheduler/NexaCommerce.ReportScheduler/Dockerfile
+      args:
+        BUILD_CONFIGURATION: Release
+    restart: unless-stopped
+    environment:
+      ConnectionStrings__scheduler-db: "Host=postgres;Port=5432;Database=catalog;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      ConnectionStrings__rabbitmq:     "amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672"
+      DOTNET_ENVIRONMENT: Production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+# ── Named Volumes ────────────────────────────────────────────────────────────
+# LEARNING: Volumes declared here are managed by Docker and persist across
+# `docker compose down`. Only `docker compose down -v` removes them.
+volumes:
+  postgres-data:
+  minio-data:
+  rabbitmq-data:
