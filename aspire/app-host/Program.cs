@@ -127,8 +127,17 @@ var traefik = builder.AddContainer("traefik", "traefik", "v3.3")
         "/etc/traefik/traefik.yml", isReadOnly: true)
     .WithBindMount("../../Infrastructure/traefik/config/dynamic",
         "/etc/traefik/dynamic", isReadOnly: true)
-    .WithHttpEndpoint(port: 80,   targetPort: 80,   name: "http")       // API entry point
-    .WithHttpEndpoint(port: 8080, targetPort: 8080, name: "dashboard"); // Traefik dashboard
+    // LEARNING — host port vs targetPort:
+    //   targetPort: the port Traefik listens on INSIDE the container (always 80).
+    //   port:       the port Docker binds on the HOST machine.
+    //
+    //   Port 80 is almost always taken on Windows (IIS, World Wide Web Publishing
+    //   Service, Skype, etc.). Using a high non-conflicting port on the host avoids
+    //   the bind failure that causes Aspire's DCP to time out.
+    //   → API traffic:  http://localhost:8088/api/products
+    //   → Dashboard:    http://localhost:8081
+    .WithHttpEndpoint(port: 8088, targetPort: 80,   name: "http")       // API entry point
+    .WithHttpEndpoint(port: 8081, targetPort: 8080, name: "dashboard"); // Traefik dashboard
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODE 2 — .NET projects built from source
