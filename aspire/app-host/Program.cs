@@ -101,35 +101,36 @@ var rabbitMq = builder.AddRabbitMQ("rabbitmq")
 
 // ── Traefik (Reverse Proxy) ───────────────────────────────────────────────────
 // LEARNING: Traefik routes external HTTP traffic to your services.
-// The config files in Infrastructure/traefik/ are the main learning artifact
-// for Phase 7 — read those files to understand static vs dynamic config,
-// reusable middleware, and why workers have no routes.
+// AddContainer() is used because there is no native Aspire Traefik resource.
 //
-// Running Traefik via Aspire AddContainer causes a DCP timeout on Windows
-// (UpdateWithEffectiveAddressInfo never resolves when Docker fails to bind).
-// Run it standalone instead:
-//
-//   docker run -d --name traefik -p 8088:80 -p 8081:8080 traefik:v3.3 \
-//     --entryPoints.web.address=:80 \
-//     --api.dashboard=true \
-//     --api.insecure=true
-//
-//   Dashboard: http://localhost:8081
-//   API proxy: http://localhost:8088/api/products
+// WithBindMount() mounts local config files into the container:
+//   - traefik.yml  → static config (entry points, providers, log level)
+//   - dynamic/     → dynamic config (routes, middleware) — watched + hot-reloaded
 //
 // ROUTING TABLE for NexaCommerce:
 //   ProductCatalog   → http://localhost:8088/api/products/**   (HTTP service ✅)
 //   Notifications    → NOT routed (worker, no HTTP surface ❌)
 //   ReportScheduler  → NOT routed (worker, no HTTP surface ❌)
-/*
+//
+// Workers communicate only via the message bus — they are invisible to HTTP.
+//
+//   Dashboard: http://localhost:8081
+//   API proxy: http://localhost:8088/api/products
 var traefik = builder.AddContainer("traefik", "traefik", "v3.3")
-    .WithArgs(
-        "--entryPoints.web.address=:80",
-        "--api.dashboard=true",
-        "--api.insecure=true")
+    // LEARNING — Static config via file (mounted) so the full traefik.yml pattern
+    // is demonstrated. The file defines entry points, file provider, and log level.
+    .WithBindMount("../../Infrastructure/traefik/config/traefik.yml",
+        "/etc/traefik/traefik.yml", isReadOnly: true)
+    // LEARNING — Dynamic config directory: Traefik watches this folder and
+    // hot-reloads routes/middleware without a container restart.
+    .WithBindMount("../../Infrastructure/traefik/config/dynamic",
+        "/etc/traefik/dynamic", isReadOnly: true)
+    // LEARNING — host port vs targetPort:
+    //   targetPort = port Traefik listens on INSIDE the container (80 / 8080).
+    //   port       = port Docker binds on the HOST machine.
+    //   Using 8088/8081 avoids conflicts with IIS or other services on 80/8080.
     .WithHttpEndpoint(port: 8088, targetPort: 80,   name: "http")
     .WithHttpEndpoint(port: 8081, targetPort: 8080, name: "dashboard");
-*/
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODE 2 — .NET projects built from source
