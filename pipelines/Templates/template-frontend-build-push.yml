@@ -1,0 +1,116 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# template-frontend-build-push.yml — Reusable Frontend Pipeline Template
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# LEARNING — Frontend pipeline vs backend pipeline:
+#
+#   Backend:   dotnet restore → dotnet build → dotnet test → docker build + push
+#   Frontend:  npm ci → npm run build → docker build + push
+#
+#   Key difference: 'npm ci' (not 'npm install').
+#
+#   npm install:  resolves versions from package.json ranges (^1.2.3 → any 1.x.x)
+#   npm ci:       installs EXACTLY the versions in package-lock.json
+#                 Fails if package.json and package-lock.json are out of sync.
+#                 → Same guarantee as dotnet restore --locked-mode
+#
+# How to call this template:
+#   steps:
+#   - template: ../../Templates/template-frontend-build-push.yml
+#     parameters:
+#       workingDirectory: frontend/nexacommerce-ui
+#       imageName: nexacommerce/frontend
+#       buildScript: build:prod
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+parameters:
+  # Directory containing package.json (relative to repo root).
+  - name: workingDirectory
+    type: string
+
+  # Docker image name without tag.
+  - name: imageName
+    type: string
+
+  # npm script to run for production build (default: "build").
+  - name: buildScript
+    type: string
+    default: "build"
+
+  # npm script to run tests (default: "test:ci" — headless, no watch mode).
+  - name: testScript
+    type: string
+    default: "test:ci"
+
+  # Whether to run npm tests.
+  - name: runTests
+    type: boolean
+    default: true
+
+  # Docker registry service connection name.
+  - name: containerRegistryServiceConnection
+    type: string
+    default: "nexacommerce-acr"
+
+  # Path to the Dockerfile for the frontend.
+  - name: dockerfilePath
+    type: string
+    default: "frontend/nexacommerce-ui/Dockerfile"
+
+steps:
+
+  # ── Step 1: Use Node.js LTS ─────────────────────────────────────────────────
+  # LEARNING — NodeTool@0:
+  #   Installs the specified Node.js version on the agent.
+  #   Pin to an LTS version — same reason as pinning the .NET SDK.
+  #   'lts' is a moving target; prefer explicit e.g. '22.x' or read from .nvmrc.
+  - task: NodeTool@0
+    displayName: "Use Node.js LTS"
+    inputs:
+      versionSpec: "22.x"
+
+  # ── Step 2: npm ci (locked install) ─────────────────────────────────────────
+  # LEARNING — npm ci vs npm install in CI:
+  #   npm ci:
+  #     • Deletes node_modules first (clean install)
+  #     • Reads package-lock.json exactly (no version resolution)
+  #     • Fails if package.json and lock file are out of sync
+  #     • Faster in CI because it skips version resolution
+  #   Use npm install only when you WANT to update the lock file.
+  - script: npm ci
+    displayName: "npm ci (locked install)"
+    workingDirectory: ${{ parameters.workingDirectory }}
+
+  # ── Step 3: Run frontend tests ───────────────────────────────────────────────
+  # LEARNING — Headless testing in CI:
+  #   Angular's default 'ng test' opens Chrome. CI agents have no display.
+  #   Use 'ng test --watch=false --browsers=ChromeHeadless' or a separate
+  #   'test:ci' script in package.json that sets those flags automatically.
+  - ${{ if parameters.runTests }}:
+    - script: npm run ${{ parameters.testScript }}
+      displayName: "Run frontend unit tests"
+      workingDirectory: ${{ parameters.workingDirectory }}
+
+  # ── Step 4: Production build ─────────────────────────────────────────────────
+  # 'npm run build:prod' runs Angular's production build:
+  #   • Tree-shaking (removes unused code)
+  #   • Minification
+  #   • AOT compilation (no runtime compiler in the bundle)
+  #   • Source maps (set to hidden-source-map in production)
+  - script: npm run ${{ parameters.buildScript }}
+    displayName: "npm build (production)"
+    workingDirectory: ${{ parameters.workingDirectory }}
+
+  # ── Step 5: Docker build + push ──────────────────────────────────────────────
+  - task: Docker@2
+    displayName: "Docker build and push"
+    inputs:
+      command: buildAndPush
+      containerRegistry: ${{ parameters.containerRegistryServiceConnection }}
+      repository: ${{ parameters.imageName }}
+      dockerfile: ${{ parameters.dockerfilePath }}
+      buildContext: ${{ parameters.workingDirectory }}
+      tags: |
+        $(Build.BuildNumber)
+        latest

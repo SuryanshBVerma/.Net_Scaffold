@@ -1,0 +1,28 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Notifications — Build + Push Pipeline
+# ═══════════════════════════════════════════════════════════════════════════════
+
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+  paths:
+    include:
+      - backend/notifications/**
+      - backend/shared-kernel/**
+      - Directory.Build.props
+      - Directory.Packages.props
+      - global.json
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - template: ../../Templates/template-backend-build-push.yml
+    parameters:
+      projectPath:    backend/notifications/NexaCommerce.Notifications/NexaCommerce.Notifications.csproj
+      dockerfilePath: backend/notifications/NexaCommerce.Notifications/Dockerfile
+      imageName:      nexacommerce/notifications
+      runTests:       true
+      testProjectPath: backend/notifications/NexaCommerce.Notifications.Tests/NexaCommerce.Notifications.Tests.csproj

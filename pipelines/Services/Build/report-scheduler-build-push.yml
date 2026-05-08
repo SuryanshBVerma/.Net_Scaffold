@@ -1,0 +1,28 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# ReportScheduler — Build + Push Pipeline
+# ═══════════════════════════════════════════════════════════════════════════════
+
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+  paths:
+    include:
+      - backend/report-scheduler/**
+      - backend/shared-kernel/**
+      - Directory.Build.props
+      - Directory.Packages.props
+      - global.json
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - template: ../../Templates/template-backend-build-push.yml
+    parameters:
+      projectPath:    backend/report-scheduler/NexaCommerce.ReportScheduler/NexaCommerce.ReportScheduler.csproj
+      dockerfilePath: backend/report-scheduler/NexaCommerce.ReportScheduler/Dockerfile
+      imageName:      nexacommerce/report-scheduler
+      runTests:       true
+      testProjectPath: backend/report-scheduler/NexaCommerce.ReportScheduler.Tests/NexaCommerce.ReportScheduler.Tests.csproj

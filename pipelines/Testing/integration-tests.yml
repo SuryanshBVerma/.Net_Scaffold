@@ -1,0 +1,96 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# integration-tests.yml — Testcontainers Integration Test Pipeline
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# LEARNING — Why integration tests run separately from unit tests:
+#
+#   Unit tests:        run on every push, fast (<30s), no Docker required
+#   Integration tests: run on PR merge to main, slower (1-3 min), Docker required
+#
+#   Testcontainers starts real Docker containers. The build agent needs Docker.
+#   Microsoft-hosted ubuntu-latest agents have Docker pre-installed.
+#   Windows agents (windows-latest) also have Docker but Linux containers
+#   require enabling them manually — stick with ubuntu-latest for Testcontainers.
+#
+# LEARNING — What these tests verify that unit tests cannot:
+#   • Real SQL translation — GroupBy, navigation joins, complex WHERE clauses
+#   • Database constraints — unique indexes, FK violations
+#   • EF Core migrations — schema matches the actual model
+#   • Connection pooling behaviour under parallel load
+#
+# LEARNING — Testcontainers in CI:
+#   No setup needed. Testcontainers pulls the Docker image and manages
+#   the container lifecycle entirely within the test run. The pipeline
+#   just runs 'dotnet test' — Testcontainers handles everything else.
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - backend/product-catalog/**
+      - tests/common/**
+      - tests/integration/**
+
+# LEARNING — Pull request triggers:
+#   Run integration tests on PRs targeting main to catch regressions before merge.
+pr:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - backend/product-catalog/**
+      - tests/integration/**
+
+pool:
+  # LEARNING: ubuntu-latest has Docker Engine pre-installed.
+  # Testcontainers uses the Docker socket (/var/run/docker.sock) to pull images
+  # and start containers. No additional Docker setup needed.
+  vmImage: ubuntu-latest
+
+steps:
+  - task: UseDotNet@2
+    displayName: "Use .NET SDK from global.json"
+    inputs:
+      useGlobalJson: true
+
+  # Restore with --locked-mode to catch stale lock files.
+  - script: |
+      dotnet restore tests/integration/NexaCommerce.ProductCatalog.IntegrationTests/NexaCommerce.ProductCatalog.IntegrationTests.csproj \
+        --locked-mode
+    displayName: "Restore NuGet packages (locked)"
+
+  # Build without restore (already done above).
+  - script: |
+      dotnet build tests/integration/NexaCommerce.ProductCatalog.IntegrationTests/NexaCommerce.ProductCatalog.IntegrationTests.csproj \
+        --no-restore -c Release
+    displayName: "Build integration tests"
+
+  # LEARNING — Running Testcontainers tests in CI:
+  #   The test run looks identical to running unit tests.
+  #   Testcontainers automatically detects the Docker socket on the agent.
+  #   Each test class that injects PostgreSqlFixture gets its OWN container
+  #   started and stopped — full isolation, no cross-test pollution.
+  #
+  #   First run on a clean agent: pulls postgres:17-alpine (~80MB download).
+  #   Subsequent runs: image is cached by Docker → fast.
+  - task: DotNetCoreCLI@2
+    displayName: "Run Testcontainers integration tests"
+    inputs:
+      command: test
+      projects: tests/integration/NexaCommerce.ProductCatalog.IntegrationTests/NexaCommerce.ProductCatalog.IntegrationTests.csproj
+      arguments: >
+        --no-build
+        -c Release
+        --logger trx
+        --results-directory $(Agent.TempDirectory)/TestResults
+      publishTestResults: true
+
+  # LEARNING — publishTestResults: true
+  #   Azure DevOps reads the .trx files and displays pass/fail counts in the
+  #   pipeline summary tab. Failing tests are highlighted with the exact
+  #   assertion message. No need to dig through console output.

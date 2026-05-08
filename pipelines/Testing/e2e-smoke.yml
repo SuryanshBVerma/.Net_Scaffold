@@ -1,0 +1,147 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# e2e-smoke.yml — Playwright E2E Smoke Test Pipeline
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# LEARNING — E2E pipeline pattern:
+#
+#   1. Start the full stack        (docker compose up -d)
+#   2. Wait for health endpoint    (poll until 200 or timeout)
+#   3. Install Playwright browsers (dotnet playwright install)
+#   4. Run E2E tests               (dotnet test — Playwright drives Chromium)
+#   5. Collect failure screenshots (artifact upload)
+#   6. Always tear down the stack  (docker compose down)
+#
+# LEARNING — Why E2E tests run AFTER build + push:
+#   E2E tests verify the BUILT IMAGE works end-to-end.
+#   They should run against the same image that will be deployed to staging.
+#   In a full pipeline: build → push → pull image → compose up → E2E → deploy.
+#
+#   In this scaffold, E2E tests run against the source-built stack (compose build)
+#   to keep the setup simple. In production, replace 'build:' with 'image:' in
+#   docker-compose.yml to pull from the registry.
+#
+# LEARNING — always() condition on teardown:
+#   The 'docker compose down' step uses condition: always() so it runs even if
+#   the E2E tests fail. Without this, a failing test leaves orphaned containers
+#   on the agent consuming ports and memory for subsequent runs.
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  # The URL Playwright uses to reach the ProductCatalog API.
+  # Matches the port mapping in docker-compose.yml (8081 → 8080 inside container).
+  BASE_URL: "http://localhost:8081"
+
+steps:
+  - task: UseDotNet@2
+    displayName: "Use .NET SDK from global.json"
+    inputs:
+      useGlobalJson: true
+
+  # ── Step 1: Start the full stack ─────────────────────────────────────────────
+  # LEARNING — docker compose up -d:
+  #   -d (detached): starts all containers in the background.
+  #   The pipeline step returns immediately; containers keep running.
+  #   --build: rebuild images from Dockerfiles (ensures latest code is used).
+  #
+  #   We start only the services needed for smoke tests:
+  #     postgres, rabbitmq, minio (infrastructure) + product-catalog (API under test)
+  #   Notifications and ReportScheduler are not needed for /health + /api/products.
+  - script: |
+      cp .env.example .env
+      docker compose up -d --build postgres rabbitmq minio product-catalog
+    displayName: "Start stack (docker compose)"
+
+  # ── Step 2: Wait for the API to be healthy ───────────────────────────────────
+  # LEARNING — Health polling in CI:
+  #   'docker compose up -d' returns immediately — it doesn't wait for services
+  #   to be ready. We need to poll the health endpoint before running tests.
+  #
+  #   This loop: tries up to 30 times (5s apart = 2.5 min max) to GET /health.
+  #   Exits with code 1 if the service never becomes healthy → pipeline fails
+  #   with a clear "service didn't start" message rather than a confusing
+  #   Playwright "connection refused" error.
+  - script: |
+      echo "Waiting for product-catalog to become healthy..."
+      for i in $(seq 1 30); do
+        STATUS=$(curl -s -o /dev/null -w "%{http_code}" $(BASE_URL)/health || true)
+        echo "Attempt $i: HTTP $STATUS"
+        if [ "$STATUS" = "200" ]; then
+          echo "Service is healthy!"
+          exit 0
+        fi
+        sleep 5
+      done
+      echo "ERROR: Service did not become healthy within 150 seconds"
+      docker compose logs product-catalog
+      exit 1
+    displayName: "Wait for product-catalog health"
+
+  # ── Step 3: Restore + build E2E tests ───────────────────────────────────────
+  - script: |
+      dotnet restore tests/e2e/NexaCommerce.E2E.Tests/NexaCommerce.E2E.Tests.csproj --locked-mode
+      dotnet build   tests/e2e/NexaCommerce.E2E.Tests/NexaCommerce.E2E.Tests.csproj --no-restore -c Release
+    displayName: "Build E2E test project"
+
+  # ── Step 4: Install Playwright browser binaries ──────────────────────────────
+  # LEARNING — dotnet playwright install:
+  #   Downloads Chromium/Firefox/WebKit browser binaries to ~/.cache/ms-playwright/.
+  #   Must run once on the agent before any Playwright test can execute.
+  #   In production CI, cache this directory between runs to avoid the ~200MB
+  #   download on every pipeline run.
+  #
+  #   The path to the Playwright CLI is inside the test project's build output.
+  - script: |
+      dotnet tool install --global Microsoft.Playwright.CLI 2>/dev/null || true
+      pwsh tests/e2e/NexaCommerce.E2E.Tests/bin/Release/net10.0/playwright.ps1 install chromium
+    displayName: "Install Playwright Chromium"
+
+  # ── Step 5: Run E2E smoke tests ──────────────────────────────────────────────
+  # LEARNING — BASE_URL env var:
+  #   SmokeTests.cs reads Environment.GetEnvironmentVariable("BASE_URL").
+  #   Setting it here means the same test code works locally (different port)
+  #   and in CI — no hardcoded URLs in tests.
+  - task: DotNetCoreCLI@2
+    displayName: "Run Playwright E2E smoke tests"
+    env:
+      BASE_URL: $(BASE_URL)
+    inputs:
+      command: test
+      projects: tests/e2e/NexaCommerce.E2E.Tests/NexaCommerce.E2E.Tests.csproj
+      arguments: >
+        --no-build
+        -c Release
+        --logger trx
+        --results-directory $(Agent.TempDirectory)/TestResults
+      publishTestResults: true
+
+  # ── Step 6: Collect failure screenshots ─────────────────────────────────────
+  # LEARNING — Playwright failure screenshots:
+  #   Configure Playwright to take a screenshot on test failure.
+  #   In BrowserNewContextOptions set RecordVideoDir or use OnPageError.
+  #   Publish as pipeline artifacts so you can download and inspect them.
+  - task: PublishPipelineArtifact@1
+    displayName: "Publish E2E failure screenshots"
+    condition: failed()  # Only publish if tests failed — no noise on green runs
+    inputs:
+      targetPath: "$(Agent.TempDirectory)/playwright-screenshots"
+      artifactName: "e2e-failure-screenshots"
+
+  # ── Step 7: Always tear down the stack ───────────────────────────────────────
+  # LEARNING — condition: always():
+  #   This step runs regardless of whether previous steps succeeded or failed.
+  #   Critical for cleanup — orphaned containers block port 8081 for future runs.
+  #
+  #   -v: remove named volumes too (postgres-data etc.) for a clean slate.
+  #       Omit -v if you want to debug the database state after a failure.
+  - script: docker compose down -v
+    displayName: "Tear down stack (always)"
+    condition: always()

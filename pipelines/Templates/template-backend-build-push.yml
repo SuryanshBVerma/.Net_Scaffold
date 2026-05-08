@@ -1,0 +1,157 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# template-backend-build-push.yml — Reusable Backend Pipeline Template
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# LEARNING — Azure DevOps Reusable Templates:
+#
+#   This file defines a template that can be CALLED by other pipeline files.
+#   Any pipeline that needs to build + test + push a .NET service passes its
+#   specific values as parameters and this template handles the rest.
+#
+#   Before templates:                    After templates:
+#     product-catalog-build.yml: 80 lines   product-catalog-build.yml: 15 lines
+#     notifications-build.yml:   80 lines   notifications-build.yml:   15 lines
+#     report-scheduler-build.yml: 80 lines  report-scheduler-build.yml: 15 lines
+#     Total: 240 lines                     Total: 80 + 45 = 125 lines
+#
+#   Adding a new service = adding a 15-line file. No copy-paste.
+#   Fixing a bug in the pipeline = fix it once here, all services benefit.
+#
+# LEARNING — Template parameters:
+#   Parameters are like function arguments. The calling pipeline passes values;
+#   the template uses them as $(parameterName) or ${{ parameters.name }}.
+#
+#   ${{ parameters.name }}  → compile-time expansion (YAML processing)
+#   $(name)                 → runtime expansion (agent variable substitution)
+#   Use ${{ }} for things that affect pipeline structure (conditions, step names).
+#   Use $() for things used inside script steps.
+#
+# How to call this template from a service pipeline:
+#   steps:
+#   - template: ../../Templates/template-backend-build-push.yml
+#     parameters:
+#       projectPath: backend/product-catalog/NexaCommerce.ProductCatalog/NexaCommerce.ProductCatalog.csproj
+#       dockerfilePath: backend/product-catalog/NexaCommerce.ProductCatalog/Dockerfile
+#       imageName: nexacommerce/product-catalog
+#       runTests: true
+#       testProjectPath: backend/product-catalog/NexaCommerce.ProductCatalog.Tests/NexaCommerce.ProductCatalog.Tests.csproj
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+parameters:
+  # Path to the main .csproj file being built (used for restore + publish).
+  - name: projectPath
+    type: string
+
+  # Path to the Dockerfile (relative to repo root — matches the docker build context).
+  - name: dockerfilePath
+    type: string
+
+  # Docker image name without tag (e.g. "nexacommerce/product-catalog").
+  # The tag is automatically set to the pipeline run number.
+  - name: imageName
+    type: string
+
+  # Docker registry service connection name (configured in Azure DevOps project settings).
+  # Points to your Azure Container Registry, Docker Hub, or other registry.
+  - name: containerRegistryServiceConnection
+    type: string
+    default: "nexacommerce-acr"
+
+  # Whether to run unit tests as part of this pipeline.
+  # Set to false for workers that have no test project yet.
+  - name: runTests
+    type: boolean
+    default: true
+
+  # Path to the test project .csproj (ignored if runTests is false).
+  - name: testProjectPath
+    type: string
+    default: ""
+
+  # Docker build arg BUILD_CONFIGURATION. Release in CI, Debug for dev builds.
+  - name: buildConfiguration
+    type: string
+    default: "Release"
+
+steps:
+
+  # ── Step 1: Use the pinned .NET SDK version ─────────────────────────────────
+  # LEARNING — UseDotNet task:
+  #   Installs the .NET SDK version from global.json on the build agent.
+  #   Without this, the agent uses whatever SDK it has installed, which may
+  #   differ from your pinned version → "works on my machine" bugs.
+  #
+  #   useGlobalJson: true → reads the version from global.json automatically.
+  #   No hardcoding the version in the pipeline YAML.
+  - task: UseDotNet@2
+    displayName: "Use .NET SDK from global.json"
+    inputs:
+      useGlobalJson: true
+
+  # ── Step 2: Restore NuGet packages ──────────────────────────────────────────
+  # LEARNING — --locked-mode:
+  #   Fails the build if packages.lock.json is out of sync with the .csproj.
+  #   This prevents "surprise dependency upgrade" bugs where a developer
+  #   updates a package locally but forgets to commit the updated lock file.
+  #   CI becomes the enforcer — if you changed a .csproj, commit the lock file too.
+  #
+  #   Without --locked-mode: CI silently resolves whatever NuGet finds.
+  #   With --locked-mode:    CI FAILS if the lock file is stale. Explicit is better.
+  - script: |
+      dotnet restore ${{ parameters.projectPath }} --locked-mode
+    displayName: "Restore NuGet packages (locked)"
+
+  # ── Step 3: Build ────────────────────────────────────────────────────────────
+  # --no-restore: skip restore (already done in Step 2, no need to repeat).
+  # This keeps pipeline steps independent and avoids duplicate network calls.
+  - script: |
+      dotnet build ${{ parameters.projectPath }} \
+        -c ${{ parameters.buildConfiguration }} \
+        --no-restore
+    displayName: "Build (${{ parameters.buildConfiguration }})"
+
+  # ── Step 4: Run unit tests ───────────────────────────────────────────────────
+  # LEARNING — Conditional steps:
+  #   ${{ if parameters.runTests }} → compile-time condition.
+  #   The step is REMOVED from the pipeline YAML entirely if false.
+  #   This is different from a runtime condition (which still shows in the UI
+  #   as "skipped"). Compile-time conditions keep the pipeline clean.
+  - ${{ if parameters.runTests }}:
+    - task: DotNetCoreCLI@2
+      displayName: "Run unit tests"
+      inputs:
+        command: test
+        projects: ${{ parameters.testProjectPath }}
+        arguments: >
+          --no-build
+          -c ${{ parameters.buildConfiguration }}
+          --logger trx
+          --results-directory $(Agent.TempDirectory)/TestResults
+        publishTestResults: true
+
+  # ── Step 5: Docker build + push ──────────────────────────────────────────────
+  # LEARNING — Docker@2 task:
+  #   Handles docker build + docker push in one task.
+  #   containerRegistry: references a service connection → credentials are injected
+  #   securely by Azure DevOps. You never put registry credentials in YAML.
+  #
+  #   tags: $(Build.BuildNumber) pins the image to this pipeline run.
+  #   Also tag 'latest' so the latest image is always pullable without knowing
+  #   the exact build number.
+  #
+  #   buildContext: . → repo root as the Docker build context.
+  #   This is required because our Dockerfiles COPY from sibling directories
+  #   (SharedKernel, ProductCatalog.Data) that are outside the service directory.
+  - task: Docker@2
+    displayName: "Docker build and push"
+    inputs:
+      command: buildAndPush
+      containerRegistry: ${{ parameters.containerRegistryServiceConnection }}
+      repository: ${{ parameters.imageName }}
+      dockerfile: ${{ parameters.dockerfilePath }}
+      buildContext: "."
+      tags: |
+        $(Build.BuildNumber)
+        latest
+      arguments: "--build-arg BUILD_CONFIGURATION=${{ parameters.buildConfiguration }}"

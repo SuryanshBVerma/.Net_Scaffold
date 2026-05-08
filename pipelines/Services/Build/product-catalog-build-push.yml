@@ -1,0 +1,47 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# ProductCatalog — Build + Push Pipeline
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# LEARNING — This file is intentionally short.
+# ALL the build logic lives in the template. This file only answers:
+#   "Which service is this?" → the parameters below.
+#
+# To add a new service to CI: copy this file, change the parameters. Done.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# LEARNING — trigger:
+#   Defines which branch changes kick off this pipeline.
+#   paths.include: only trigger when files inside these paths change.
+#   This avoids rebuilding ProductCatalog when you only changed ReportScheduler.
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+  paths:
+    include:
+      - backend/product-catalog/**
+      - backend/shared-kernel/**        # SharedKernel changes affect all services
+      - Directory.Build.props
+      - Directory.Packages.props
+      - global.json
+
+# LEARNING — pool:
+#   The Azure DevOps agent pool to run on.
+#   ubuntu-latest: Microsoft-hosted Ubuntu agent with Docker pre-installed.
+#   Use self-hosted agents if you need access to internal registries or secrets.
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  # LEARNING — template reference:
+  #   The path is relative to this file's location.
+  #   ../../Templates/ → go up two levels from Services/Build/ to pipelines/
+  #   then into Templates/.
+  - template: ../../Templates/template-backend-build-push.yml
+    parameters:
+      projectPath:    backend/product-catalog/NexaCommerce.ProductCatalog/NexaCommerce.ProductCatalog.csproj
+      dockerfilePath: backend/product-catalog/NexaCommerce.ProductCatalog/Dockerfile
+      imageName:      nexacommerce/product-catalog
+      runTests:       true
+      testProjectPath: backend/product-catalog/NexaCommerce.ProductCatalog.Tests/NexaCommerce.ProductCatalog.Tests.csproj

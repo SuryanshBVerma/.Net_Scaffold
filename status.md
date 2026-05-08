@@ -25,7 +25,7 @@
 | 7 | Traefik Reverse Proxy | ✅ Complete | `feat(infra): add Traefik reverse proxy...` | ✅ Build succeeded |
 | 8 | Tests (Unit + Testcontainers + Playwright E2E) | ✅ Complete | `test: add unit tests, Testcontainers integration tests, and Playwright E2E smoke tests` | ✅ 24/24 unit tests passed |
 | 9 | Dockerfiles + docker-compose | ✅ Complete | `feat(containers): add multi-stage Dockerfiles, docker-compose, and dev override` | ✅ Build succeeded |
-| 10 | Azure DevOps Pipeline Templates | ❌ | — | — |
+| 10 | Azure DevOps Pipeline Templates | ✅ Complete | `feat(pipelines): add reusable Azure DevOps pipeline templates for backend and testing` | ✅ Build succeeded |
 | 11 | Frontend Placeholder (nexacommerce-ui) | ❌ | — | — |
 
 ---
