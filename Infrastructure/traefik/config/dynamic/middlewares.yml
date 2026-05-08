@@ -1,0 +1,129 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Dynamic Configuration — Reusable Middleware
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# LEARNING — Middleware reuse pattern:
+#   Define middleware ONCE here and reference it by name in any router.
+#   Syntax for cross-file reference: "<name>@file"
+#   (The "@file" suffix tells Traefik the middleware is from the file provider,
+#    not from Docker labels or Kubernetes annotations.)
+#
+#   Example usage in a router:
+#     middlewares:
+#       - rate-limit@file
+#       - cors@file
+#       - https-redirect@file
+#
+# LEARNING — Middleware chain:
+#   Middleware runs in the order listed on the router, not in the order
+#   they appear in this file. This file is just the definition registry.
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+http:
+  middlewares:
+
+    # ── Rate Limiting ───────────────────────────────────────────────────────────
+    # LEARNING: Rate limiting protects your services from traffic spikes and
+    # abuse without changing any application code. Traefik handles it at the
+    # proxy layer before requests ever reach your service.
+    #
+    # average: sustained requests per second allowed (token bucket refill rate)
+    # burst:   maximum requests allowed in a burst above the average
+    #
+    # A client sending 150 req/s will be allowed the first 100 + burst of 50,
+    # then Traefik returns HTTP 429 Too Many Requests for the overflow.
+    rate-limit:
+      rateLimit:
+        average: 100   # req/s sustained rate
+        burst: 50      # additional burst capacity above average
+
+    # ── CORS Headers ───────────────────────────────────────────────────────────
+    # LEARNING: CORS is configured once here and applied to any router that
+    # includes "cors@file" in its middleware list. No CORS configuration needed
+    # in the ASP.NET Core application itself when the proxy handles it.
+    #
+    # In this scaffold, the Angular frontend at localhost:4200 calls the catalog
+    # API. Without this middleware, the browser blocks cross-origin requests.
+    #
+    # accessControlAllowOriginList: list the exact origins you trust.
+    # Using "*" is a security risk — it allows any origin. Be explicit.
+    cors:
+      headers:
+        accessControlAllowOriginList:
+          - "http://localhost:4200"    # Angular dev server (Phase 11)
+          - "http://localhost:80"      # Traefik itself (for same-origin)
+        accessControlAllowHeaders:
+          - "Content-Type"
+          - "Authorization"
+          - "X-Correlation-Id"         # Set by CorrelationIdMiddleware in SharedKernel
+        accessControlAllowMethods:
+          - "GET"
+          - "POST"
+          - "PUT"
+          - "DELETE"
+          - "OPTIONS"
+        accessControlMaxAge: 86400     # Cache preflight response for 24 hours
+
+    # ── HTTPS Redirect ─────────────────────────────────────────────────────────
+    # LEARNING: Redirect all HTTP traffic to HTTPS.
+    # Apply this middleware on the "web" (port 80) entry point router to enforce TLS.
+    # Not applied to product-catalog.yml in dev — we run HTTP only locally.
+    #
+    # Production pattern:
+    #   routers:
+    #     my-service-redirect:
+    #       rule: "PathPrefix(`/api`)"
+    #       entryPoints: [web]
+    #       middlewares: [https-redirect@file]
+    #       service: my-service
+    #     my-service:
+    #       rule: "PathPrefix(`/api`)"
+    #       entryPoints: [websecure]
+    #       service: my-service
+    https-redirect:
+      redirectScheme:
+        scheme: https
+        permanent: true   # HTTP 301 — browsers cache this redirect permanently
+
+    # ── Strip Prefix ───────────────────────────────────────────────────────────
+    # LEARNING: If your upstream service is mounted at "/" but Traefik routes
+    # requests to it via "/api/products", the upstream sees "/api/products/..."
+    # in the path. Use stripPrefix to remove the routing prefix before forwarding.
+    #
+    # Example without strip-api-prefix:
+    #   Traefik receives:  GET /api/products/123
+    #   Upstream sees:     GET /api/products/123   ← correct for this scaffold
+    #
+    # Example WITH strip-api-prefix (if your service listens at "/products"):
+    #   Traefik receives:  GET /api/products/123
+    #   Upstream sees:     GET /products/123       ← prefix stripped
+    #
+    # In this scaffold, ProductCatalog registers routes under /api/products,
+    # so we do NOT apply strip-api-prefix. It's here as a learning reference.
+    strip-api-prefix:
+      stripPrefix:
+        prefixes:
+          - "/api"
+
+    # ── Retry ──────────────────────────────────────────────────────────────────
+    # LEARNING: Traefik can automatically retry failed upstream requests.
+    # Useful for transient connection errors during rolling deploys.
+    # attempts: number of retry attempts (not counting the original request)
+    # initialInterval: wait between retries (exponential backoff not built-in; use CircuitBreaker)
+    retry:
+      retry:
+        attempts: 3
+        initialInterval: "100ms"
+
+    # ── Circuit Breaker ────────────────────────────────────────────────────────
+    # LEARNING: Traefik can open a circuit when an upstream is unhealthy,
+    # immediately returning 503 instead of waiting for timeout on every request.
+    # This prevents cascading failures when a downstream service is struggling.
+    #
+    # expression: condition to open the circuit
+    #   NetworkErrorRatio() > 0.30  → open if >30% of requests are network errors
+    #   ResponseCodeRatio(500, 600, 0, 600) > 0.25  → open if >25% return 5xx
+    circuit-breaker:
+      circuitBreaker:
+        expression: "NetworkErrorRatio() > 0.30 || ResponseCodeRatio(500, 600, 0, 600) > 0.25"

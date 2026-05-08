@@ -21,8 +21,8 @@
 | 3 | Aspire AppHost (all 3 resource modes) | ✅ Complete | `feat(aspire): add AppHost...` | ✅ Build succeeded |
 | 4 | ProductCatalog Web API (EF Core, LINQ, FastEndpoints, Wolverine, MinIO) | ✅ Complete | `feat(product-catalog): ...` | ✅ 13/13 tests passed |
 | 5 | Notifications Worker (Wolverine local transport) | ✅ Complete | `feat(notifications): ...` | ✅ 6/6 tests passed |
-| 6 | ReportScheduler + RabbitMQ Transport Upgrade | ❌ | — | — |
-| 7 | Traefik Reverse Proxy | ❌ | — | — |
+| 6 | ReportScheduler + RabbitMQ Transport Upgrade | ✅ Complete | `feat(report-scheduler): ...` | ✅ 5/5 tests passed |
+| 7 | Traefik Reverse Proxy | ✅ Complete | `feat(infra): add Traefik reverse proxy...` | ✅ Build succeeded |
 | 8 | Tests (Unit + Testcontainers + Playwright E2E) | ❌ | — | — |
 | 9 | Dockerfiles + docker-compose | ❌ | — | — |
 | 10 | Azure DevOps Pipeline Templates | ❌ | — | — |

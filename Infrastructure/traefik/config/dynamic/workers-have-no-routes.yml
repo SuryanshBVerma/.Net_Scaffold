@@ -1,0 +1,69 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# WHY WORKERS HAVE NO TRAEFIK ROUTES
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# This file exists to make the ABSENCE of routes explicit and educational.
+# No routes are defined here — this is intentional.
+#
+# ── The Two Service Patterns in NexaCommerce ────────────────────────────────
+#
+#   HTTP Services (expose an API):
+#     ProductCatalog   → receives HTTP requests from clients and frontends
+#                        → needs a Traefik route  ✅
+#                        → defined in product-catalog.yml
+#
+#   Message Workers (no HTTP surface):
+#     Notifications    → receives messages from RabbitMQ via Wolverine
+#                        → has NO HTTP endpoints to route to  ❌
+#     ReportScheduler  → runs Quartz.NET cron jobs, publishes events to RabbitMQ
+#                        → has NO HTTP endpoints to route to  ❌
+#
+# ── Why Routing Workers Through Traefik Is a Mistake ────────────────────────
+#
+#   Workers are designed to be INVISIBLE to HTTP. They:
+#     • Listen on RabbitMQ queues, not TCP ports
+#     • Have no controllers, no endpoints, no health API (by design)
+#     • Scale independently of HTTP traffic (based on queue depth, not req/s)
+#
+#   If you added a Traefik route for a worker, it would:
+#     • Point to a URL that returns connection refused (no HTTP server)
+#     • Expose internal infrastructure that should be private
+#     • Add HTTP overhead to a service that doesn't need it
+#
+# ── How Workers Communicate ─────────────────────────────────────────────────
+#
+#   ProductCatalog publishes an event:
+#     IMessageBus.PublishAsync(new ProductCreatedEvent(...))
+#                  ↓
+#           RabbitMQ exchange
+#                  ↓
+#     Wolverine delivers to Notifications worker
+#                  ↓
+#     ProductCreatedHandler.Handle(ProductCreatedEvent) runs
+#
+#   The message travels via RabbitMQ — no HTTP involved.
+#   Traefik never sees this traffic. That's correct by design.
+#
+# ── Service Visibility Matrix ────────────────────────────────────────────────
+#
+#   Service             │ Has HTTP? │ Traefik Route │ Message Bus
+#   ────────────────────┼───────────┼───────────────┼────────────
+#   ProductCatalog      │    ✅     │      ✅       │ Publishes events
+#   Notifications       │    ❌     │      ❌       │ Consumes events
+#   ReportScheduler     │    ❌     │      ❌       │ Publishes events
+#
+# ── What If a Worker Needs an HTTP Endpoint? ────────────────────────────────
+#
+#   Sometimes workers need to expose:
+#     • A /health endpoint for load balancer checks
+#     • An admin API to trigger a job manually
+#     • Metrics for Prometheus scraping
+#
+#   In those cases, add a minimal health endpoint and give it a Traefik route.
+#   The point is: don't add HTTP surface you don't need.
+#   Start with zero, add only what's necessary.
+#
+#   Example: if ReportScheduler needed a /jobs/trigger endpoint in the future,
+#   you'd create report-scheduler.yml here with a targeted PathPrefix rule.
+#
+# ═══════════════════════════════════════════════════════════════════════════════

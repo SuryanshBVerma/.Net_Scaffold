@@ -111,21 +111,24 @@ var rabbitMq = builder.AddRabbitMQ("rabbitmq")
 // Workers communicate only through the message bus — they are invisible to HTTP.
 // Routing them through Traefik would be a mistake (they have no endpoints to route to).
 //
-// Phase 7 adds the Traefik config files to infra/traefik/.
-// Uncomment this block in Phase 7.
-/*
+// Phase 7 adds the Traefik config files to Infrastructure/traefik/.
 var traefik = builder.AddContainer("traefik", "traefik", "v3.3")
-    .WithArgs(
-        "--providers.file.directory=/etc/traefik/dynamic",
-        "--providers.file.watch=true",
-        "--entryPoints.web.address=:80",
-        "--api.dashboard=true",
-        "--api.insecure=true")          // Dashboard without auth — dev only!
-    .WithBindMount("../../infra/traefik/traefik.yml", "/etc/traefik/traefik.yml", isReadOnly: true)
-    .WithBindMount("../../infra/traefik/dynamic", "/etc/traefik/dynamic", isReadOnly: true)
-    .WithHttpEndpoint(port: 80,   targetPort: 80,   name: "http")
-    .WithHttpEndpoint(port: 8080, targetPort: 8080, name: "dashboard");
-*/
+    // LEARNING — CLI args vs static config file:
+    // Entry points and providers can be set via CLI args (simpler for dev)
+    // or in traefik.yml (better for production — version-controlled, reviewable).
+    // We use the static config file here to demonstrate the full pattern.
+    // The args below are left as a reference for quick one-off overrides.
+    //   "--providers.file.directory=/etc/traefik/dynamic",
+    //   "--providers.file.watch=true",
+    //   "--entryPoints.web.address=:80",
+    //   "--api.dashboard=true",
+    //   "--api.insecure=true"
+    .WithBindMount("../../Infrastructure/traefik/config/traefik.yml",
+        "/etc/traefik/traefik.yml", isReadOnly: true)
+    .WithBindMount("../../Infrastructure/traefik/config/dynamic",
+        "/etc/traefik/dynamic", isReadOnly: true)
+    .WithHttpEndpoint(port: 80,   targetPort: 80,   name: "http")       // API entry point
+    .WithHttpEndpoint(port: 8080, targetPort: 8080, name: "dashboard"); // Traefik dashboard
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODE 2 — .NET projects built from source

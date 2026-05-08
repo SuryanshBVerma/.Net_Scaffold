@@ -1,0 +1,82 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Traefik Static Configuration
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# LEARNING — Static vs Dynamic configuration:
+#
+#   STATIC (this file):
+#     • Entry points — which ports Traefik listens on
+#     • Providers — how Traefik discovers routes (file, Docker, Kubernetes)
+#     • API / dashboard settings
+#     • Log level
+#     Changes here require a Traefik RESTART.
+#
+#   DYNAMIC (./dynamic/*.yml):
+#     • Routers — which requests go where (PathPrefix, Host rules)
+#     • Services — the upstream URLs (your actual service addresses)
+#     • Middleware — transformations applied in-flight (rate limit, headers, redirects)
+#     Traefik watches the dynamic directory and HOT-RELOADS these files.
+#     Add a file = add a route. No restart required.
+#
+# This separation is intentional: the stable infrastructure config lives here,
+# while the frequently-changing routing config lives in hot-reload files.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── Dashboard ─────────────────────────────────────────────────────────────────
+# LEARNING: The dashboard shows the live routing table — every router, service,
+# and middleware Traefik has discovered from the dynamic config files.
+#
+# api.insecure=true → dashboard accessible at http://localhost:8080 with NO auth.
+# NEVER use this in production. Use:
+#   api:
+#     dashboard: true
+#   middlewares: (add BasicAuth or JWT in dynamic config)
+api:
+  dashboard: true
+  insecure: true   # ⚠ Dev only — protect with auth in production
+
+# ── Entry Points ──────────────────────────────────────────────────────────────
+# LEARNING: Entry points are the ports Traefik binds to.
+# Every HTTP router must name one or more entry points to match on.
+#
+# In production you'd add TLS termination on websecure here:
+#   websecure:
+#     address: ":443"
+#     http:
+#       tls:
+#         certResolver: letsencrypt
+entryPoints:
+  web:
+    address: ":80"       # All HTTP traffic enters here
+  websecure:
+    address: ":443"      # HTTPS — TLS configured per-router in dynamic config
+
+# ── Providers ─────────────────────────────────────────────────────────────────
+# LEARNING: Providers tell Traefik how to discover routes.
+#
+#   file   → reads YAML/TOML files from a directory (this scaffold)
+#   docker → reads Docker labels from running containers
+#   k8s    → reads Kubernetes Ingress / IngressRoute objects
+#
+# We use the file provider because:
+#   1. It works without Docker labels or Kubernetes
+#   2. It's explicit — every route is a readable YAML file
+#   3. The "watch: true" setting makes it hot-reload on changes
+#
+# In a Docker Compose or Kubernetes setup you'd switch to the docker/k8s provider
+# and remove the file provider.
+providers:
+  file:
+    directory: /etc/traefik/dynamic   # Mounted from Infrastructure/traefik/config/dynamic/
+    watch: true                        # Hot-reload: edit a file → route updates in seconds
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+# LEARNING: Set to DEBUG locally to see exactly which router matched each request,
+# which middleware ran, and what upstream URL was selected.
+# In production use INFO to avoid log volume.
+log:
+  level: INFO   # Options: DEBUG | INFO | WARN | ERROR
+
+# Access logs: every HTTP request with status, latency, upstream URL.
+# Disabled by default — enable during debugging or for access auditing.
+# accessLog: {}

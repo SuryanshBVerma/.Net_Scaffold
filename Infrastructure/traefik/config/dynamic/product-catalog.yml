@@ -1,0 +1,90 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Dynamic Route — ProductCatalog Service
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# LEARNING — Dynamic configuration hot-reloads without restarting Traefik.
+# This file is watched by the file provider defined in traefik.yml.
+# Edit it and the routing table updates within seconds.
+#
+# LEARNING — Route-per-service pattern:
+#   Each HTTP service you own gets its own dynamic config file.
+#   Adding a new service = adding a new file here. No central routing config to modify.
+#   File naming convention: <service-name>.yml
+#
+# ROUTING TABLE ENTRY:
+#   Incoming:  GET  http://localhost/api/products
+#   Incoming:  POST http://localhost/api/products
+#   Incoming:  GET  http://localhost/api/products/{id}
+#   Upstream:  http://product-catalog:8080/api/products/...
+#
+#   ┌────────────────────────────────────────────────────────────────────────┐
+#   │  Client → :80/api/products/**                                          │
+#   │             ↓                                                          │
+#   │  [rate-limit middleware]  →  [cors middleware]                         │
+#   │             ↓                                                          │
+#   │  product-catalog:8080/api/products/**  (Aspire-assigned port)          │
+#   └────────────────────────────────────────────────────────────────────────┘
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+http:
+
+  # ── Routers ──────────────────────────────────────────────────────────────────
+  # LEARNING: A router connects an incoming request rule to a service + middleware.
+  # Multiple routers can point to the same service (e.g. admin + public routes).
+  routers:
+    product-catalog:
+      # LEARNING — Rule syntax:
+      #   PathPrefix(`/api/products`) → matches any path starting with /api/products
+      #   Host(`api.example.com`)     → matches by hostname
+      #   Method(`GET`)               → matches HTTP method
+      #   Rules can be combined with && (AND) and || (OR):
+      #   "Host(`example.com`) && PathPrefix(`/api`)"
+      rule: "PathPrefix(`/api/products`)"
+
+      # Which entry point(s) to match on (defined in traefik.yml).
+      entryPoints:
+        - web
+
+      # Middleware to apply before forwarding to the upstream service.
+      # Middleware is defined in middlewares.yml and referenced by name.
+      # Order matters: middleware runs top-to-bottom.
+      middlewares:
+        - rate-limit@file   # Protect against traffic spikes
+        - cors@file         # Add CORS headers for the Angular frontend
+
+      # The upstream service to forward to (defined in the services section below).
+      service: product-catalog
+
+      # LEARNING — Priority:
+      # When multiple routers match the same request, the one with the longer/more
+      # specific rule wins automatically (Traefik calculates priority from rule length).
+      # You can override with an explicit priority number if needed.
+
+  # ── Services ─────────────────────────────────────────────────────────────────
+  # LEARNING: A service is the upstream target — the actual application URL.
+  # loadBalancer supports multiple servers for horizontal scaling:
+  #   servers:
+  #     - url: "http://product-catalog-1:8080"
+  #     - url: "http://product-catalog-2:8080"
+  # Traefik round-robins between them automatically.
+  services:
+    product-catalog:
+      loadBalancer:
+        # LEARNING — Service discovery in this scaffold:
+        # In Aspire mode, Aspire assigns a dynamic port. The URL here is used
+        # when running Traefik standalone (docker compose without Aspire).
+        # In Aspire, Traefik would be configured with the Aspire-injected URL.
+        #
+        # In production: replace with your Kubernetes service DNS name or
+        # cloud load balancer URL. The router rule and middleware don't change.
+        servers:
+          - url: "http://product-catalog:8080"
+
+        # LEARNING — Health checks:
+        # Traefik can poll a /health endpoint and remove unhealthy servers from
+        # the rotation automatically. Uncomment in production:
+        # healthCheck:
+        #   path: /health
+        #   interval: "10s"
+        #   timeout: "3s"
