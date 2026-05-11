@@ -1,7 +1,4 @@
-# This workflow will build a .NET project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-net
-
-name: .NET
+name: .NET Build & Test
 
 on:
   push:
@@ -10,21 +7,46 @@ on:
     branches: [ "master" ]
 
 jobs:
-  build:
-
+  # ── Job 1: Unit tests (fast, no Docker required) ──────────────────────────
+  unit-tests:
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v4
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-          # Reads the SDK version from global.json — stays in sync automatically.
-          # No need to hardcode 10.0.x here and in global.json separately.
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
           global-json-file: global.json
-    - name: Restore dependencies
-      run: dotnet restore NexaCommerce.slnx 
-    - name: Build
-      run: dotnet build NexaCommerce.slnx --no-restore
-    - name: Test
-      run: dotnet test NexaCommerce.slnx --no-build --verbosity normal
+
+      - name: Restore
+        run: dotnet restore NexaCommerce.slnx --locked-mode
+
+      - name: Build
+        run: dotnet build NexaCommerce.slnx --no-restore
+
+      - name: Unit tests
+        run: |
+          dotnet test backend/product-catalog/NexaCommerce.ProductCatalog.Tests/NexaCommerce.ProductCatalog.Tests.csproj --no-build --verbosity normal
+          dotnet test backend/notifications/NexaCommerce.Notifications.Tests/NexaCommerce.Notifications.Tests.csproj --no-build --verbosity normal
+          dotnet test backend/report-scheduler/NexaCommerce.ReportScheduler.Tests/NexaCommerce.ReportScheduler.Tests.csproj --no-build --verbosity normal
+
+  # ── Job 2: Integration tests (Testcontainers — Docker available on ubuntu) ─
+  integration-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore NexaCommerce.slnx --locked-mode
+
+      - name: Build
+        run: dotnet build NexaCommerce.slnx --no-restore
+
+      - name: Integration tests (Testcontainers)
+        run: dotnet test tests/integration/NexaCommerce.ProductCatalog.IntegrationTests/NexaCommerce.ProductCatalog.IntegrationTests.csproj --no-build --verbosity normal
+

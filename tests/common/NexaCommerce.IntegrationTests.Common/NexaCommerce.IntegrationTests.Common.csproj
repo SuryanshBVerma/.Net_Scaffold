@@ -2,6 +2,11 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <!-- This is a shared library, NOT a test runner.
+         Directory.Build.props sets IsTestProject=true for everything under tests/
+         so we explicitly override it here to prevent dotnet test from trying to
+         execute this project as a test assembly. -->
+    <IsTestProject>false</IsTestProject>
   </PropertyGroup>
 
   <ItemGroup>
