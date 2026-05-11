@@ -215,7 +215,6 @@ var reportScheduler = builder.AddProject<Projects.NexaCommerce_ReportScheduler>(
 var frontend = builder.AddJavaScriptApp("frontend", "../../frontend/nexacommerce-ui", "start")
     .WithNpm(install: true)
     .WithEnvironment("CATALOG_API_URL", catalogApi.GetEndpoint("http"))
-    .WithHttpEndpoint(port: int.Parse(cfg["Frontend:Port"]!), env: "PORT")
     .WaitFor(catalogApi);
 
 // ─────────────────────────────────────────────────────────────────────────────
