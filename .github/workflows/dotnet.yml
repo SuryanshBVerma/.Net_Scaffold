@@ -42,7 +42,7 @@ jobs:
           global-json-file: global.json
 
       - name: Restore
-        run: dotnet restore NexaCommerce.slnx --locked-mode
+        run: dotnet restore NexaCommerce.slnx
 
       - name: Build
         run: dotnet build NexaCommerce.slnx --no-restore
