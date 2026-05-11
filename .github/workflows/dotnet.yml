@@ -1,0 +1,30 @@
+# This workflow will build a .NET project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-net
+
+name: .NET
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+          # Reads the SDK version from global.json — stays in sync automatically.
+          # No need to hardcode 10.0.x here and in global.json separately.
+          global-json-file: global.json
+    - name: Restore dependencies
+      run: dotnet restore NexaCommerce.slnx 
+    - name: Build
+      run: dotnet build NexaCommerce.slnx --no-restore
+    - name: Test
+      run: dotnet test NexaCommerce.slnx --no-build --verbosity normal
