@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using NexaCommerce.ProductCatalog.Data;
 using NexaCommerce.ProductCatalog.Data.Entities;
-using NexaCommerce.IntegrationTests.Common.Fixtures;
 using Shouldly;
 using Xunit;
 
@@ -24,52 +23,23 @@ namespace NexaCommerce.ProductCatalog.IntegrationTests;
 /// ALL queries in this file demonstrate a different LINQ operator/pattern.
 /// Read the comments — they explain what SQL each LINQ expression compiles to.
 /// </summary>
-public sealed class CatalogDbContextTests(PostgreSqlFixture fixture)
-    : IClassFixture<PostgreSqlFixture>
+public sealed class CatalogDbContextTests(CatalogDbFixture fixture)
+    : IClassFixture<CatalogDbFixture>
 {
-    // Seed data ids — deterministic so assertions are stable across runs.
-    private static readonly Guid ElectronicsId = Guid.Parse("a0000000-0000-0000-0000-000000000001");
-    private static readonly Guid AppliancesId  = Guid.Parse("a0000000-0000-0000-0000-000000000002");
+    // IDs are defined on the fixture (single source of truth).
+    private static readonly Guid ElectronicsId = CatalogDbFixture.ElectronicsId;
+    private static readonly Guid AppliancesId  = CatalogDbFixture.AppliancesId;
 
-    /// <summary>
-    /// Seed the database once before running queries.
-    /// Returns the context so callers can query immediately after seeding.
-    /// </summary>
-    private async Task<CatalogDbContext> SeedAsync()
-    {
-        var db = fixture.CreateDbContext();
+    // LEARNING — each test opens a fresh context so there is no shared change-tracker
+    // state between tests. The data itself is stable (seeded once in CatalogDbFixture).
 
-        // Idempotent: skip if already seeded (fixture is shared across tests in the class).
-        if (await db.Categories.AnyAsync()) return db;
-
-        db.Categories.AddRange(
-            new Category { Id = ElectronicsId, Name = "Electronics" },
-            new Category { Id = AppliancesId,  Name = "Appliances"  });
-
-        db.Products.AddRange(
-            new Product { Id = Guid.NewGuid(), Name = "Laptop",      Price = 999.99m,  CategoryId = ElectronicsId, IsActive = true,  CreatedAt = DateTimeOffset.UtcNow.AddDays(-10), UpdatedAt = DateTimeOffset.UtcNow.AddDays(-10), Description = "High-end laptop" },
-            new Product { Id = Guid.NewGuid(), Name = "Headphones",  Price = 49.99m,   CategoryId = ElectronicsId, IsActive = true,  CreatedAt = DateTimeOffset.UtcNow.AddDays(-5),  UpdatedAt = DateTimeOffset.UtcNow.AddDays(-5),  Description = "Wireless headphones" },
-            new Product { Id = Guid.NewGuid(), Name = "Keyboard",    Price = 79.99m,   CategoryId = ElectronicsId, IsActive = false, CreatedAt = DateTimeOffset.UtcNow.AddDays(-30), UpdatedAt = DateTimeOffset.UtcNow.AddDays(-30), Description = "Mechanical keyboard" },
-            new Product { Id = Guid.NewGuid(), Name = "Mouse",       Price = 29.99m,   CategoryId = ElectronicsId, IsActive = true,  CreatedAt = DateTimeOffset.UtcNow.AddDays(-2),  UpdatedAt = DateTimeOffset.UtcNow.AddDays(-2),  Description = "Wireless mouse" },
-            new Product { Id = Guid.NewGuid(), Name = "Dishwasher",  Price = 449.99m,  CategoryId = AppliancesId,  IsActive = true,  CreatedAt = DateTimeOffset.UtcNow.AddDays(-20), UpdatedAt = DateTimeOffset.UtcNow.AddDays(-20), Description = "Energy-efficient dishwasher" },
-            new Product { Id = Guid.NewGuid(), Name = "Microwave",   Price = 89.99m,   CategoryId = AppliancesId,  IsActive = true,  CreatedAt = DateTimeOffset.UtcNow.AddDays(-15), UpdatedAt = DateTimeOffset.UtcNow.AddDays(-15), Description = "Countertop microwave" },
-            new Product { Id = Guid.NewGuid(), Name = "Blender",     Price = 59.99m,   CategoryId = AppliancesId,  IsActive = false, CreatedAt = DateTimeOffset.UtcNow.AddDays(-8),  UpdatedAt = DateTimeOffset.UtcNow.AddDays(-8),  Description = "High-speed blender" },
-            new Product { Id = Guid.NewGuid(), Name = "Coffee Maker",Price = 129.99m,  CategoryId = AppliancesId,  IsActive = true,  CreatedAt = DateTimeOffset.UtcNow.AddDays(-1),  UpdatedAt = DateTimeOffset.UtcNow.AddDays(-1),  Description = "Programmable coffee maker" },
-            new Product { Id = Guid.NewGuid(), Name = "Monitor",     Price = 299.99m,  CategoryId = ElectronicsId, IsActive = true,  CreatedAt = DateTimeOffset.UtcNow.AddDays(-7),  UpdatedAt = DateTimeOffset.UtcNow.AddDays(-7),  Description = "4K display" },
-            new Product { Id = Guid.NewGuid(), Name = "Tablet",      Price = 399.99m,  CategoryId = ElectronicsId, IsActive = true,  CreatedAt = DateTimeOffset.UtcNow.AddDays(-3),  UpdatedAt = DateTimeOffset.UtcNow.AddDays(-3),  Description = "10-inch tablet" });
-
-        await db.SaveChangesAsync();
-        return db;
-    }
-
-    // ── WHERE — filtering ─────────────────────────────────────────────────────
 
     [Fact]
     public async Task Where_filters_by_price_correctly()
     {
         // LINQ LEARNING: .Where() translates to SQL WHERE clause.
         // SQL: SELECT * FROM "Products" WHERE "Price" < 100
-        await using var db = await SeedAsync();
+        await using var db = fixture.CreateDbContext();
         var results = await db.Products.Where(p => p.Price < 100).ToListAsync();
 
         // LEARNING: ShouldAllBe — assert EVERY item satisfies a condition.
@@ -82,7 +52,7 @@ public sealed class CatalogDbContextTests(PostgreSqlFixture fixture)
     {
         // LINQ LEARNING: Chain multiple .Where() calls — each adds an AND clause.
         // SQL: SELECT * FROM "Products" WHERE "IsActive" = true AND "Price" < 200
-        await using var db = await SeedAsync();
+        await using var db = fixture.CreateDbContext();
         var results = await db.Products
             .Where(p => p.IsActive)
             .Where(p => p.Price < 200)
@@ -99,7 +69,7 @@ public sealed class CatalogDbContextTests(PostgreSqlFixture fixture)
         // LINQ LEARNING: .Select() translates to SQL SELECT with specific columns.
         // SQL: SELECT "Id", "Name", "Price" FROM "Products"
         // This avoids loading unused columns — important for wide tables.
-        await using var db = await SeedAsync();
+        await using var db = fixture.CreateDbContext();
         var summaries = await db.Products
             .Select(p => new { p.Id, p.Name, p.Price })
             .ToListAsync();
@@ -115,7 +85,7 @@ public sealed class CatalogDbContextTests(PostgreSqlFixture fixture)
     {
         // LINQ LEARNING: .OrderBy() → SQL ORDER BY column ASC
         // .OrderByDescending() → SQL ORDER BY column DESC
-        await using var db = await SeedAsync();
+        await using var db = fixture.CreateDbContext();
         var ordered = await db.Products.OrderBy(p => p.Name).ToListAsync();
 
         // Assert ordering is correct by comparing to a locally sorted copy.
@@ -127,7 +97,7 @@ public sealed class CatalogDbContextTests(PostgreSqlFixture fixture)
     public async Task OrderByDescending_then_ThenBy_sorts_correctly()
     {
         // LINQ LEARNING: .ThenBy() adds a secondary sort — SQL: ORDER BY col1 DESC, col2 ASC
-        await using var db = await SeedAsync();
+        await using var db = fixture.CreateDbContext();
         var ordered = await db.Products
             .OrderByDescending(p => p.CategoryId)
             .ThenBy(p => p.Price)
@@ -144,7 +114,7 @@ public sealed class CatalogDbContextTests(PostgreSqlFixture fixture)
         // LINQ LEARNING: .Skip() + .Take() → SQL OFFSET n LIMIT m
         // This is server-side pagination — only the requested slice is loaded.
         // Critical for performance on large tables.
-        await using var db = await SeedAsync();
+        await using var db = fixture.CreateDbContext();
         const int pageSize = 3;
         const int page     = 2; // 1-based
 
@@ -162,7 +132,7 @@ public sealed class CatalogDbContextTests(PostgreSqlFixture fixture)
     {
         // LINQ LEARNING: .Take(n) alone (without Skip) → SQL LIMIT n
         // Used for "top N" queries, e.g. the 5 most recently added products.
-        await using var db = await SeedAsync();
+        await using var db = fixture.CreateDbContext();
         var top3 = await db.Products
             .OrderByDescending(p => p.CreatedAt)
             .Take(3)
@@ -178,7 +148,7 @@ public sealed class CatalogDbContextTests(PostgreSqlFixture fixture)
     {
         // LINQ LEARNING: .AnyAsync() → SQL EXISTS (SELECT 1 FROM ... WHERE ...)
         // More efficient than .CountAsync() > 0 — stops scanning after first match.
-        await using var db = await SeedAsync();
+        await using var db = fixture.CreateDbContext();
         var hasExpensive = await db.Products.AnyAsync(p => p.Price > 500);
         hasExpensive.ShouldBeTrue();
     }
@@ -188,7 +158,7 @@ public sealed class CatalogDbContextTests(PostgreSqlFixture fixture)
     {
         // LINQ LEARNING: .CountAsync(predicate) → SQL SELECT COUNT(*) WHERE ...
         // No data is loaded into memory — just the count comes back from the DB.
-        await using var db = await SeedAsync();
+        await using var db = fixture.CreateDbContext();
         var activeCount = await db.Products.CountAsync(p => p.IsActive);
         activeCount.ShouldBeGreaterThan(0);
     }
@@ -208,7 +178,7 @@ public sealed class CatalogDbContextTests(PostgreSqlFixture fixture)
         // InMemory EF cannot translate GroupBy + navigation properties to SQL —
         // it silently falls back to client-side evaluation. This is a common
         // source of bugs that only integration tests against real Postgres catch.
-        await using var db = await SeedAsync();
+        await using var db = fixture.CreateDbContext();
         var groups = await db.Products
             .GroupBy(p => p.CategoryId)
             .Select(g => new
@@ -235,7 +205,7 @@ public sealed class CatalogDbContextTests(PostgreSqlFixture fixture)
         //
         // Without Include: product.Category is null (lazy loading disabled by default in EF Core).
         // With Include:    product.Category is populated from the JOIN result.
-        await using var db = await SeedAsync();
+        await using var db = fixture.CreateDbContext();
         var products = await db.Products
             .Include(p => p.Category)
             .Where(p => p.IsActive)
@@ -259,7 +229,7 @@ public sealed class CatalogDbContextTests(PostgreSqlFixture fixture)
         //
         // RULE: Use AsNoTracking() for every read path. Use tracked queries ONLY when
         //       you intend to modify and SaveChanges().
-        await using var db = await SeedAsync();
+        await using var db = fixture.CreateDbContext();
         var products = await db.Products
             .AsNoTracking()
             .Where(p => p.IsActive)
@@ -282,7 +252,7 @@ public sealed class CatalogDbContextTests(PostgreSqlFixture fixture)
         // LINQ LEARNING: .FirstOrDefaultAsync() → SQL SELECT ... LIMIT 1
         // Returns null (not an exception) when no row matches.
         // Use .FirstAsync() when you KNOW the row must exist (throws if missing).
-        await using var db = await SeedAsync();
+        await using var db = fixture.CreateDbContext();
         var missing = await db.Products.FirstOrDefaultAsync(p => p.Name == "DoesNotExist");
         missing.ShouldBeNull();
     }
@@ -290,7 +260,7 @@ public sealed class CatalogDbContextTests(PostgreSqlFixture fixture)
     [Fact]
     public async Task FirstOrDefaultAsync_returns_matching_product()
     {
-        await using var db = await SeedAsync();
+        await using var db = fixture.CreateDbContext();
         var laptop = await db.Products.FirstOrDefaultAsync(p => p.Name == "Laptop");
         laptop.ShouldNotBeNull();
         laptop!.Price.ShouldBe(999.99m);
