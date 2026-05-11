@@ -43,6 +43,10 @@
         },
         "serve": {
           "builder": "@angular-devkit/build-angular:dev-server",
+          "options": {
+            "proxyConfig": "proxy.conf.json",
+            "open": false
+          },
           "configurations": {
             "production": {
               "buildTarget": "nexacommerce-ui:build:production"
