@@ -5,7 +5,7 @@
   "description": "NexaCommerce Angular frontend — Aspire Mode 3 npm integration placeholder",
   "scripts": {
     "prestart": "node scripts/generate-env.js",
-    "start": "node scripts/serve.js",
+    "start": "ng serve --host 0.0.0.0 --port 4200",
     "build": "ng build --configuration production",
     "test": "ng test --watch=false --browsers=ChromeHeadless",
     "lint": "ng lint"
