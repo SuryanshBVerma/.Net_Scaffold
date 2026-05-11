@@ -23,7 +23,7 @@ jobs:
           # No need to hardcode 10.0.x here and in global.json separately.
           global-json-file: global.json
     - name: Restore dependencies
-      run: dotnet restore NexaCommerce.slnx --locked-mode
+      run: dotnet restore NexaCommerce.slnx 
     - name: Build
       run: dotnet build NexaCommerce.slnx --no-restore
     - name: Test
