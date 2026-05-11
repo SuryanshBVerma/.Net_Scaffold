@@ -82,11 +82,18 @@ public static class ApplicationBuilderExtensions
         var db = scope.ServiceProvider.GetRequiredService<TDbContext>();
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<TDbContext>>();
 
+        // LEARNING: InMemory provider does not support migrations — it has no schema.
+        // Use EnsureCreated() in tests so the in-process database is ready.
+        // Real providers (Postgres, SQL Server) use MigrateAsync() which applies
+        // pending migrations and is a no-op when the schema is up-to-date.
+        if (db.Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
+        {
+            await db.Database.EnsureCreatedAsync();
+            return;
+        }
+
         logger.LogInformation("Running EF Core migrations for {DbContext}...", typeof(TDbContext).Name);
-
-        // MigrateAsync applies any pending migrations and is a no-op if up-to-date.
         await db.Database.MigrateAsync();
-
         logger.LogInformation("Migrations complete for {DbContext}", typeof(TDbContext).Name);
     }
 }

@@ -1,4 +1,7 @@
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using NexaCommerce.ProductCatalog.Data;
 using Shouldly;
 using Xunit;
 
@@ -37,12 +40,35 @@ public sealed class ProductCatalogApiTests : IClassFixture<WebApplicationFactory
         _client = factory
             // LEARNING — WithWebHostBuilder:
             //   Override configuration for the test environment.
-            //   Here we configure an InMemory database so the test server
-            //   starts without needing a real Postgres connection.
+            //   Program.cs calls builder.AddNpgsqlDbContext<CatalogDbContext>("catalog-db")
+            //   which registers both the DbContext AND a Postgres health check.
+            //   In CI there is no Postgres, so we replace the DbContext registration
+            //   with an InMemory provider and remove the Postgres health check so
+            //   the WebApplicationFactory boots without a live database.
             .WithWebHostBuilder(host =>
             {
-                host.UseSetting("ConnectionStrings:catalog-db",
-                    "Host=localhost;Database=catalog_test;");
+                host.ConfigureServices(services =>
+                {
+                    // AddNpgsqlDbContext (Aspire) registers a pooled DbContext plus
+                    // IDbContextPool<T>, IScopedDbContextLease<T>, and DbContextOptions<T>.
+                    // Removing only DbContextOptions leaves the pool singleton referencing
+                    // a missing scoped options → lifetime conflict exception.
+                    // Remove every registration that mentions CatalogDbContext as a
+                    // generic argument, then re-register a plain (non-pooled) InMemory context.
+                    var toRemove = services
+                        .Where(d => d.ServiceType.IsGenericType &&
+                                    d.ServiceType.GetGenericArguments()
+                                     .Any(t => t == typeof(CatalogDbContext)))
+                        .ToList();
+                    foreach (var d in toRemove) services.Remove(d);
+
+                    // Re-register with InMemory using DbContextPool (not AddDbContext) to
+                    // preserve IScopedDbContextLease<T> — which the Aspire EF health check
+                    // resolves internally. Without pooling that type is never registered and
+                    // the health check throws "No service for IScopedDbContextLease".
+                    services.AddDbContextPool<CatalogDbContext>(options =>
+                        options.UseInMemoryDatabase("catalog-test"));
+                });
             })
             .CreateClient();
     }
@@ -59,12 +85,13 @@ public sealed class ProductCatalogApiTests : IClassFixture<WebApplicationFactory
     }
 
     [Fact]
-    public async Task Products_endpoint_returns_401_without_auth()
+    public async Task Create_product_endpoint_returns_401_without_auth()
     {
-        // LEARNING: The /api/products endpoint requires JWT authentication.
-        // An unauthenticated request should return 401 Unauthorized.
+        // LEARNING: POST /api/products (CreateProductEndpoint) does NOT call
+        // AllowAnonymous(), so FastEndpoints enforces authentication by default.
+        // An unauthenticated request must return 401 Unauthorized.
         // This verifies the auth middleware is wired correctly — not skipped.
-        var response = await _client.GetAsync("/api/products");
+        var response = await _client.PostAsync("/api/products", null);
         ((int)response.StatusCode).ShouldBe(401);
     }
 }
