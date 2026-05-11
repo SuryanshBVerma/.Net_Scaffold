@@ -33,9 +33,23 @@
 //   • Distributed traces across service boundaries (click a trace → full call chain)
 //   • Metrics in real time
 //
+// LEARNING — Configuration-driven orchestration:
+//   Nothing in this file is hardcoded. All image tags, ports, credentials, and
+//   paths are read from appsettings.json (or overridden by environment variables).
+//   To upgrade Postgres from 17 to 18: change one line in appsettings.json.
+//   To change a port in CI: set an environment variable — no code change needed.
+//
 // ═══════════════════════════════════════════════════════════════════════════
 
 var builder = DistributedApplication.CreateBuilder(args);
+
+// LEARNING — Reading config in the AppHost:
+//   builder.Configuration is a standard IConfiguration backed by:
+//     appsettings.json → appsettings.{Environment}.json → environment variables
+//   Environment variables override appsettings — use them in CI/CD or Docker.
+//   The double-underscore separator maps nested JSON:
+//     Traefik__HttpPort=9000  overrides  "Traefik": { "HttpPort": 9000 }
+var cfg = builder.Configuration;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODE 1 — Pre-built Docker images
@@ -52,9 +66,11 @@ var builder = DistributedApplication.CreateBuilder(args);
 //   ConnectionStrings__catalog-db=Host=localhost;Port=xxxxx;Database=catalog;...
 // The service reads it with: builder.Configuration.GetConnectionString("catalog-db")
 var postgres = builder.AddPostgres("postgres")
-    .WithImage("postgres", "17-alpine")   // Pin image tag for reproducibility.
-    .WithPgAdmin()                        // Starts pgAdmin at a random port (see dashboard).
-    .WithDataVolume("nexa-postgres-data"); // Persists data across container restarts.
+    // LEARNING: Tag read from config. To upgrade: set Postgres:Tag in appsettings.json.
+    .WithImage("postgres", cfg["Postgres:Tag"]!)
+    // LEARNING: PgAdmin is optional — disable it in environments without a GUI.
+    .WithPgAdmin()
+    .WithDataVolume(cfg["Postgres:DataVolume"]!);
 
 var catalogDb = postgres.AddDatabase("catalog-db");
 
@@ -67,22 +83,23 @@ var catalogDb = postgres.AddDatabase("catalog-db");
 // WithEnvironment() → sets MinIO's root credentials.
 // WithHttpEndpoint() → exposes the S3 API port AND the admin console.
 //
-// Admin console: http://localhost:9001  (user: minioadmin / pass: minioadmin)
-// S3 API:        http://localhost:9000  (used by MinioObjectStorageService)
+// Admin console: http://localhost:MinioConsoleTargetPort  (see appsettings.json)
+// S3 API:        http://localhost:<random>  (used by MinioObjectStorageService)
 //
-// Production swap: change the ServiceURL in appsettings to your AWS S3 endpoint.
-// Code in ProductService.cs doesn't change at all.
-var minio = builder.AddContainer("minio", "minio/minio", "RELEASE.2025-04-22T22-12-26Z")
-    .WithArgs("server", "/data", "--console-address", ":9001")
-    .WithVolume("nexa-minio-data", "/data")
-    .WithEnvironment("MINIO_ROOT_USER", "minioadmin")
-    .WithEnvironment("MINIO_ROOT_PASSWORD", "minioadmin")
-    // LEARNING — omitting 'port' lets Aspire pick a random host port, avoiding
-    // conflicts with any other process on 9000/9001. The endpoint URL injected
-    // into catalogApi via GetEndpoint("s3-api") always reflects the actual
-    // assigned port. Check the Aspire dashboard to see which port was assigned.
-    .WithHttpEndpoint(targetPort: 9000, name: "s3-api")
-    .WithHttpEndpoint(targetPort: 9001, name: "console");
+// Production swap: change Storage:ServiceUrl in the service's appsettings to
+// your AWS S3 endpoint. Code in ProductService.cs doesn't change at all.
+var minio = builder.AddContainer("minio", "minio/minio", cfg["Minio:Tag"]!)
+    .WithArgs("server", "/data", "--console-address", $":{cfg["Minio:ConsoleTargetPort"]}")
+    .WithVolume(cfg["Minio:DataVolume"]!, "/data")
+    // LEARNING: Credentials read from config — override via User Secrets or env vars
+    // in non-dev environments: dotnet user-secrets set "Minio:RootPassword" "secret"
+    .WithEnvironment("MINIO_ROOT_USER",     cfg["Minio:RootUser"]!)
+    .WithEnvironment("MINIO_ROOT_PASSWORD", cfg["Minio:RootPassword"]!)
+    // LEARNING — omitting 'port' (host port) lets Aspire pick a random host port,
+    // avoiding conflicts with other processes. The endpoint URL injected into
+    // catalogApi via GetEndpoint("s3-api") always reflects the actual assigned port.
+    .WithHttpEndpoint(targetPort: int.Parse(cfg["Minio:S3ApiTargetPort"]!),   name: "s3-api")
+    .WithHttpEndpoint(targetPort: int.Parse(cfg["Minio:ConsoleTargetPort"]!), name: "console");
 
 // ── RabbitMQ ─────────────────────────────────────────────────────────────────
 // LEARNING: RabbitMQ is the message broker used by Wolverine from Phase 6+.
@@ -90,14 +107,14 @@ var minio = builder.AddContainer("minio", "minio/minio", "RELEASE.2025-04-22T22-
 // We register it here so the AppHost is ready for Phase 6 without changes.
 //
 // WithManagementPlugin() → enables the web management UI.
-// Management UI: http://localhost:15672  (user: guest / pass: guest)
+// Management UI: http://localhost:<random>  (user: guest / pass: guest)
 //
 // Phase 6 adds WolverineFx.RabbitMQ to the services and calls:
 //   opts.UseRabbitMq(rabbitMqConnectionString)
 // That single line is the only code change to switch transports.
 var rabbitMq = builder.AddRabbitMQ("rabbitmq")
-    .WithManagementPlugin()             // Uses rabbitmq:*-management image automatically.
-    .WithDataVolume("nexa-rabbitmq-data");
+    .WithManagementPlugin()
+    .WithDataVolume(cfg["RabbitMQ:DataVolume"]!);
 
 // ── Traefik (Reverse Proxy) ───────────────────────────────────────────────────
 // LEARNING: Traefik routes external HTTP traffic to your services.
@@ -108,29 +125,24 @@ var rabbitMq = builder.AddRabbitMQ("rabbitmq")
 //   - dynamic/     → dynamic config (routes, middleware) — watched + hot-reloaded
 //
 // ROUTING TABLE for NexaCommerce:
-//   ProductCatalog   → http://localhost:8088/api/products/**   (HTTP service ✅)
+//   ProductCatalog   → http://localhost:{Traefik:HttpPort}/api/products/**  ✅
 //   Notifications    → NOT routed (worker, no HTTP surface ❌)
 //   ReportScheduler  → NOT routed (worker, no HTTP surface ❌)
 //
 // Workers communicate only via the message bus — they are invisible to HTTP.
-//
-//   Dashboard: http://localhost:8081
-//   API proxy: http://localhost:8088/api/products
-var traefik = builder.AddContainer("traefik", "traefik", "v3.3")
+var traefik = builder.AddContainer("traefik", "traefik", cfg["Traefik:Tag"]!)
     // LEARNING — Static config via file (mounted) so the full traefik.yml pattern
     // is demonstrated. The file defines entry points, file provider, and log level.
-    .WithBindMount("../../Infrastructure/traefik/config/traefik.yml",
-        "/etc/traefik/traefik.yml", isReadOnly: true)
+    .WithBindMount(cfg["Traefik:StaticConfigPath"]!, "/etc/traefik/traefik.yml", isReadOnly: true)
     // LEARNING — Dynamic config directory: Traefik watches this folder and
     // hot-reloads routes/middleware without a container restart.
-    .WithBindMount("../../Infrastructure/traefik/config/dynamic",
-        "/etc/traefik/dynamic", isReadOnly: true)
+    .WithBindMount(cfg["Traefik:DynamicConfigPath"]!, "/etc/traefik/dynamic", isReadOnly: true)
     // LEARNING — host port vs targetPort:
     //   targetPort = port Traefik listens on INSIDE the container (80 / 8080).
-    //   port       = port Docker binds on the HOST machine.
-    //   Using 8088/8081 avoids conflicts with IIS or other services on 80/8080.
-    .WithHttpEndpoint(port: 8088, targetPort: 80,   name: "http")
-    .WithHttpEndpoint(port: 8081, targetPort: 8080, name: "dashboard");
+    //   port       = port Docker binds on the HOST machine (from config).
+    //   Using non-standard host ports avoids conflicts with IIS or other services.
+    .WithHttpEndpoint(port: int.Parse(cfg["Traefik:HttpPort"]!),      targetPort: 80,   name: "http")
+    .WithHttpEndpoint(port: int.Parse(cfg["Traefik:DashboardPort"]!), targetPort: 8080, name: "dashboard");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODE 2 — .NET projects built from source
@@ -154,16 +166,17 @@ var traefik = builder.AddContainer("traefik", "traefik", "v3.3")
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Phase 4: ProductCatalog web API ──────────────────────────────────────────
-// UNCOMMENT after completing Phase 4 and adding the ProjectReference in .csproj.
 var catalogApi = builder.AddProject<Projects.NexaCommerce_ProductCatalog>("product-catalog")
     .WithReference(catalogDb)           // → ConnectionStrings__catalog-db
     .WithReference(rabbitMq)            // → ConnectionStrings__rabbitmq (Phase 6)
+    // LEARNING: GetEndpoint() returns the URL at which the MinIO container is reachable.
+    // Aspire injects this as Storage__ServiceUrl into the ProductCatalog process,
+    // overriding the value in its appsettings.json at runtime.
     .WithEnvironment("Storage__ServiceUrl", minio.GetEndpoint("s3-api"))
-    .WaitFor(catalogDb);                // Wait for Postgres to be healthy first.
+    .WaitFor(catalogDb);
 
 // ── Phase 5: Notifications worker ────────────────────────────────────────────
 // Workers have no HTTP surface — they are NOT exposed through Traefik.
-// UNCOMMENT after completing Phase 5.
 var notifications = builder.AddProject<Projects.NexaCommerce_Notifications>("notifications")
     .WithReference(rabbitMq)            // Wolverine reads events from RabbitMQ (Phase 6+)
     .WithReference(catalogDb)           // Reads product data for notification content
@@ -171,7 +184,6 @@ var notifications = builder.AddProject<Projects.NexaCommerce_Notifications>("not
 
 // ── Phase 6: ReportScheduler worker ──────────────────────────────────────────
 // Also a worker — no HTTP surface, not in Traefik.
-// UNCOMMENT after completing Phase 6.
 var reportScheduler = builder.AddProject<Projects.NexaCommerce_ReportScheduler>("report-scheduler")
     .WithReference(catalogDb)           // Quartz.NET stores its job state in Postgres
     .WithReference(rabbitMq)            // Publishes ReportReadyEvent via Wolverine
@@ -182,22 +194,7 @@ var reportScheduler = builder.AddProject<Projects.NexaCommerce_ReportScheduler>(
 // Non-.NET apps you own. Aspire runs npm and streams logs to the dashboard.
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// LEARNING: AddNpmApp() is Aspire's bridge to the JavaScript ecosystem.
-//
-//   builder.AddNpmApp("frontend", "../../frontend/nexacommerce-ui")
-//
-// What Aspire does automatically:
-//   1. Runs `npm install` if node_modules is missing (WithNpmPackageInstallation)
-//   2. Runs `npm run start`
-//   3. Streams stdout/stderr to the Aspire dashboard as structured logs
-//   4. WithEnvironment() injects the catalog API URL so the Angular app can call it
-//   5. Appears in the dashboard like any other service (health, logs, traces)
-//
-// This means the Angular team sees the backend URL automatically — no manual config.
-// ─────────────────────────────────────────────────────────────────────────────
-
-// ── Phase 11: Angular frontend ────────────────────────────────────────────────
-// LEARNING — AddJavaScriptApp() is Aspire 13's API for npm-based frontends.
+// LEARNING: AddJavaScriptApp() is Aspire 13's API for npm-based frontends.
 //   (Earlier previews used AddNpmApp() — renamed in Aspire 9+/13+.)
 //
 //   What Aspire does automatically:
@@ -208,20 +205,22 @@ var reportScheduler = builder.AddProject<Projects.NexaCommerce_ReportScheduler>(
 //        and writes src/assets/env.js → Angular reads window.__env.CATALOG_API_URL
 //     5. WithHttpEndpoint() → the Angular dev server is visible in the dashboard
 //
-//   The frontend appears in the Aspire dashboard alongside all backend services:
-//   same health status, same log streaming, same distributed trace view.
+// LEARNING — WithHttpEndpoint for a non-container (npm process) resource:
+//   Only 'port' + 'env' are specified — NOT both port and targetPort together.
+//   For a direct process there is no Docker network boundary, so a proxy that
+//   forwards portX → portX on the same host is invalid. Aspire rejects it.
+//   With only 'port' + 'env': Aspire sets PORT=4200, ng serve binds to it directly.
+
+// ── Phase 11: Angular frontend ────────────────────────────────────────────────
 var frontend = builder.AddJavaScriptApp("frontend", "../../frontend/nexacommerce-ui", "start")
     .WithNpm(install: true)
-    // LEARNING — GetEndpoint("http") returns the actual URL (with port) assigned to
-    // product-catalog. Aspire resolves this at startup — no hardcoded URLs anywhere.
     .WithEnvironment("CATALOG_API_URL", catalogApi.GetEndpoint("http"))
-    // LEARNING — env: "PORT" tells the dev server which port to listen on.
-    // Aspire sets the PORT env var to 4200 so Angular's ng serve binds there.
-    .WithHttpEndpoint(port: 4200, targetPort: 4200, env: "PORT")
-    .WaitFor(catalogApi);   // Don't start the UI until the API is ready.
+    .WithHttpEndpoint(port: int.Parse(cfg["Frontend:Port"]!), env: "PORT")
+    .WaitFor(catalogApi);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Build and run the application
 // ─────────────────────────────────────────────────────────────────────────────
 
 builder.Build().Run();
+
