@@ -53,6 +53,14 @@ public sealed class CatalogDbFixture : IAsyncLifetime
     {
         await using var db = CreateDbContext();
 
+        // EnsureCreatedAsync() applies HasData() seeds from OnModelCreating(),
+        // which already inserts "Electronics", "Apparel", "Home & Garden" categories.
+        // Category.Name has a unique index, so inserting "Electronics" again would
+        // violate the constraint. Clear HasData rows first so the fixture controls
+        // the exact dataset each test relies on.
+        await db.Products.ExecuteDeleteAsync();
+        await db.Categories.ExecuteDeleteAsync();
+
         db.Categories.AddRange(
             new Category { Id = ElectronicsId, Name = "Electronics" },
             new Category { Id = AppliancesId,  Name = "Appliances"  });
