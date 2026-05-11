@@ -12,18 +12,18 @@
 //   6. toSignal() bridges the Observable from ProductService into a signal
 //
 // ═══════════════════════════════════════════════════════════════════════════
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { Component, inject, signal, computed } from '@angular/core';
+import { toSignal, toObservable } from '@angular/core/rxjs-interop';
+import { CurrencyPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ProductService } from '../product.service';
 import { Product } from '../product.model';
 import { switchMap, startWith, catchError, of } from 'rxjs';
-import { toObservable } from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-product-list',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, CurrencyPipe],
   template: `
     <section class="product-list">
       <h2>Products</h2>
