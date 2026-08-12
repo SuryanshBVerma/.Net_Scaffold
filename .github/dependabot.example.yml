@@ -1,0 +1,27 @@
+# Learning example only.
+# Dependabot reads only .github/dependabot.yml, so this file is inactive.
+# To enable dependency update pull requests, rename this file to dependabot.yml.
+
+# Note: Teams use Dependabot to keep libraries, build actions, and base images current,
+# surface security fixes early, and review dependency changes through pull requests.
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: "/frontend/nexacommerce-ui"
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly

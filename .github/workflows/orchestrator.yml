@@ -1,0 +1,134 @@
+name: Change-Aware Orchestrator
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+  workflow_dispatch:
+    inputs:
+      run_all:
+        description: Run every validation pipeline
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  detect-changes:
+    name: Detect changed areas
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.classify.outputs.backend }}
+      frontend: ${{ steps.classify.outputs.frontend }}
+      integration: ${{ steps.classify.outputs.integration }}
+      e2e: ${{ steps.classify.outputs.e2e }}
+      security: ${{ steps.classify.outputs.security }}
+      full_validation: ${{ steps.classify.outputs.full_validation }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: classify
+        name: Classify changes
+        shell: pwsh
+        env:
+          RUN_ALL: ${{ inputs.run_all || false }}
+        run: |
+          $runAll = [System.Convert]::ToBoolean($env:RUN_ALL)
+          $baseSha = if ($env:GITHUB_EVENT_NAME -eq 'pull_request') { '${{ github.event.pull_request.base.sha }}' } else { '${{ github.event.before }}' }
+          if ([string]::IsNullOrWhiteSpace($baseSha) -or $baseSha -eq ('0' * 40)) {
+            $baseSha = (git rev-parse 'HEAD^').Trim()
+          }
+          & .github/scripts/detect-changes.ps1 -BaseSha $baseSha -HeadSha $env:GITHUB_SHA -RunAll:$runAll
+
+  backend-product-catalog:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true'
+    uses: ./.github/workflows/backend-build.yml
+    with:
+      service: product-catalog
+      project: backend/product-catalog/NexaCommerce.ProductCatalog/NexaCommerce.ProductCatalog.csproj
+      tests: backend/product-catalog/NexaCommerce.ProductCatalog.Tests/NexaCommerce.ProductCatalog.Tests.csproj
+    # secrets: inherit
+
+  backend-notifications:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true'
+    uses: ./.github/workflows/backend-build.yml
+    with:
+      service: notifications
+      project: backend/notifications/NexaCommerce.Notifications/NexaCommerce.Notifications.csproj
+      tests: backend/notifications/NexaCommerce.Notifications.Tests/NexaCommerce.Notifications.Tests.csproj
+    # secrets: inherit
+
+  backend-report-scheduler:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true'
+    uses: ./.github/workflows/backend-build.yml
+    with:
+      service: report-scheduler
+      project: backend/report-scheduler/NexaCommerce.ReportScheduler/NexaCommerce.ReportScheduler.csproj
+      tests: backend/report-scheduler/NexaCommerce.ReportScheduler.Tests/NexaCommerce.ReportScheduler.Tests.csproj
+    # secrets: inherit
+
+  frontend:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true'
+    uses: ./.github/workflows/frontend-build.yml
+    # secrets: inherit
+
+  integration:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.integration == 'true'
+    uses: ./.github/workflows/integration-tests.yml
+    # secrets: inherit
+
+  e2e:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.e2e == 'true'
+    uses: ./.github/workflows/e2e-smoke.yml
+    # secrets: inherit
+
+  security:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.security == 'true'
+    uses: ./.github/workflows/security.yml
+    # secrets: inherit
+
+  artifacts:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.full_validation == 'true'
+    uses: ./.github/workflows/build-artifacts.yml
+    with:
+      # Publishing is intentionally disabled in this learning repository.
+      publish: false
+    # secrets: inherit
+
+  aggregate:
+    name: Aggregate required status
+    if: always()
+    needs:
+      - detect-changes
+      - backend-product-catalog
+      - backend-notifications
+      - backend-report-scheduler
+      - frontend
+      - integration
+      - e2e
+      - security
+      - artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail when a selected pipeline failed
+        env:
+          RESULTS: ${{ join(needs.*.result, ',') }}
+        run: |
+          echo "Pipeline results: $RESULTS"
+          if [[ "$RESULTS" == *failure* || "$RESULTS" == *cancelled* ]]; then
+            exit 1
+          fi
+          echo "All selected pipelines passed or were skipped."

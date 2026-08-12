@@ -1,0 +1,51 @@
+name: E2E Smoke Tests
+
+on:
+  workflow_call:
+    inputs:
+      base_url:
+        required: false
+        default: http://localhost:5001
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore NexaCommerce.slnx --locked-mode
+
+      - name: Start application stack
+        run: docker compose up --build --detach
+
+      - name: Wait for API health
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent "$BASE_URL/health"; then
+              exit 0
+            fi
+            sleep 5
+          done
+          docker compose logs
+          exit 1
+
+      - name: Run E2E tests
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+        run: dotnet test tests/e2e/NexaCommerce.E2E.Tests/NexaCommerce.E2E.Tests.csproj --configuration Release --verbosity normal
+
+      - name: Tear down application stack
+        if: always()
+        run: docker compose down --volumes

@@ -23,6 +23,7 @@ nuget.exe
 *.userosscache
 *.sln.docstates
 .vscode/settings.json
+.codebase-memory/
 
 # ── Rider ────────────────────────────────────────────────────────
 .idea/

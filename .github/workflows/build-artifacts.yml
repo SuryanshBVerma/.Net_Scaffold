@@ -1,0 +1,65 @@
+name: Build and Scan Artifacts
+
+on:
+  workflow_call:
+    inputs:
+      publish:
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  # packages: write
+  # id-token: write
+  # attestations: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: ${{ github.repository_owner }}/nexacommerce
+
+jobs:
+  container:
+    name: Build and scan ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: product-catalog
+            dockerfile: backend/product-catalog/NexaCommerce.ProductCatalog/Dockerfile
+          - name: report-scheduler
+            dockerfile: backend/report-scheduler/NexaCommerce.ReportScheduler/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build immutable image
+        run: docker build --file "${{ matrix.dockerfile }}" --tag "${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.name }}:${{ github.sha }}" .
+
+      - name: Scan image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.name }}:${{ github.sha }}
+          format: table
+          exit-code: 1
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+
+      # Delivery is intentionally disabled for this repository.
+      # The images are built and scanned locally on the runner, but nothing is
+      # pushed to a registry and no signing credentials are required.
+      # To enable delivery later, restore the permissions above and uncomment:
+      #
+      # - name: Login to GitHub Container Registry
+      #   if: inputs.publish
+      #   uses: docker/login-action@v3
+      #   with:
+      #     registry: ${{ env.REGISTRY }}
+      #     username: ${{ github.actor }}
+      #     password: ${{ secrets.GITHUB_TOKEN }}
+      #
+      # - name: Publish immutable image
+      #   if: inputs.publish
+      #   run: docker push "${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.name }}:${{ github.sha }}"
+      #
+      # Signing and provenance attestation belong after publishing.

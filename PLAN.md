@@ -522,6 +522,144 @@ frontend/nexacommerce-ui/
 
 ---
 
+## Production Pipeline Learning Track
+
+The original phases establish the application architecture and a basic CI pipeline.
+The next phases focus on how a growing repository decides what to build, how changes
+move through environments, and how the delivery process is secured.
+
+### PHASE 12 — Change-Aware GitHub Actions Pipeline Orchestrator
+**Goal:** Build one orchestration workflow that detects changed areas and triggers only the pipelines required for those changes.
+**Git commit:** `feat(ci): add change-aware GitHub Actions pipeline orchestrator`
+
+#### Files to create or evolve:
+```
+.github/
+├── workflows/
+│   ├── orchestrator.yml                 ← Detects changes and dispatches child workflows
+│   ├── backend-build.yml                ← Reusable backend restore/build/test workflow
+│   ├── frontend-build.yml               ← Reusable Angular install/build/test workflow
+│   ├── integration-tests.yml            ← Reusable Testcontainers workflow
+│   └── e2e-smoke.yml                    ← Reusable full-stack smoke workflow
+└── scripts/
+    └── detect-changes.ps1               ← Optional local/CI testable change classifier
+```
+
+#### What to learn here:
+- GitHub Actions reusable workflows with `workflow_call`
+- Job outputs and conditional execution with `needs`, `if`, and matrices
+- Path-based change detection for backend services, shared libraries, frontend, infrastructure, tests, and pipeline files
+- Why shared-kernel changes fan out to all dependent services
+- Why pipeline or infrastructure changes should trigger a broader validation path
+- Passing explicit service parameters into reusable workflows instead of copying YAML
+- Separating change detection, build/test execution, and deployment decisions
+- Using pull requests for validation and protected branches/tags for delivery
+- Avoiding untrusted pull-request code in privileged jobs
+
+#### Change-routing rules to demonstrate:
+| Changed area | Required pipeline work |
+|---|---|
+| `backend/product-catalog/**` | ProductCatalog build and unit tests |
+| `backend/notifications/**` | Notifications build and unit tests |
+| `backend/report-scheduler/**` | ReportScheduler build and unit tests |
+| `backend/shared-kernel/**` | All backend builds and tests |
+| `tests/integration/**` or `tests/common/**` | Integration tests |
+| `tests/e2e/**` or `frontend/**` | Frontend build and E2E smoke tests |
+| `Infrastructure/**`, `docker-compose.yml`, or `aspire/**` | Full stack validation and E2E smoke tests |
+| `.github/**`, `Directory.*`, `global.json`, or `NuGet.Config` | Full validation and supply-chain checks |
+| Documentation-only changes | Documentation validation only, unless manually overridden |
+
+#### Orchestrator design:
+1. Checkout the repository and calculate changed paths for the pull request or push.
+2. Classify changes into stable outputs such as `backend`, `frontend`, `integration`, `e2e`, `infrastructure`, and `security`.
+3. Trigger reusable workflows through `workflow_call` or dispatch a versioned child workflow with explicit inputs.
+4. Wait for required child workflows and expose one aggregate required status for branch protection.
+5. Support a manual `run_all` override for uncertain or cross-cutting changes.
+6. Publish a short change plan in the workflow summary so the decision is inspectable.
+
+#### Acceptance exercises:
+- A ProductCatalog-only change does not run the frontend build.
+- A SharedKernel change runs every backend build and all affected tests.
+- A change to a workflow or central package file runs the full validation path.
+- A pull request receives one clear aggregate pass/fail result.
+- The same classification logic can be executed locally against a base and head revision.
+- A failed child workflow prevents the orchestrator from succeeding.
+
+#### Important design decision:
+The orchestrator should decide **what must run**, but reusable child workflows should own **how it runs**.
+This keeps change detection testable and prevents the central workflow from becoming a second copy of every pipeline.
+
+### PHASE 13 — Deployment and Supply-Chain Security
+**Goal:** Extend the GitHub Actions pipeline into a secure, auditable software-delivery process.
+**Git commit:** `feat(ci): add deployment and supply-chain security controls`
+
+#### Files to create or evolve:
+```
+.github/
+├── workflows/
+│   ├── orchestrator.yml                 ← Calls security and deployment workflows when required
+│   ├── security.yml                     ← Dependency, secret, SBOM, and image checks
+│   ├── build-artifacts.yml              ← Reproducible builds and immutable artifacts
+│   └── deploy.yml                       ← Environment promotion, migration gate, and rollback
+└── dependabot.example.yml               ← Inactive template; rename to enable Dependabot
+```
+
+The deployment workflow is intentionally a self-contained dry run. It demonstrates
+promotion, migration, verification, and rollback decisions without requiring a
+registry, remote host, deployment secrets, or configured GitHub environments.
+
+#### Controls to implement:
+- Dependency vulnerability scanning for NuGet, npm, GitHub Actions, and container base images
+- Secret scanning and push protection configuration
+- SBOM generation in SPDX or CycloneDX format and publication with build artifacts
+- Container image scanning before publication and before deployment
+- Image signing with keyless OIDC-based signing and verification at deployment time
+- Reproducible builds using pinned SDKs, locked restores, deterministic build settings, and immutable image tags
+- GitHub deployment environments for development, staging, and production
+- Database migration gates that validate and apply migrations as a controlled deployment step
+- Rollback strategy for application images, configuration, and database changes
+- Artifact retention, provenance metadata, and traceability from commit to deployed image
+- Manual approval for production deployments
+- Least-privilege permissions for `GITHUB_TOKEN` and environment-scoped secrets
+
+#### What to learn here:
+- Difference between a build artifact, a container image, an SBOM, and deployment metadata
+- Why scanning must happen before an artifact is promoted
+- Why image signing proves provenance but does not prove the image is vulnerability-free
+- How OIDC avoids storing long-lived cloud credentials in repository secrets
+- Why database migrations need compatibility planning for rolling deployments
+- How environment protection rules create a controlled promotion path
+- Why rollback is different for application code, infrastructure, and database schema
+- How retention and provenance make an incident investigation possible
+
+#### Required pipeline stages:
+1. **Verify:** restore with lock files, run dependency and secret scans, and validate workflow permissions.
+2. **Build:** compile with deterministic settings, run tests, generate the SBOM, and produce immutable artifacts.
+3. **Scan:** build and scan container images, then fail on the configured severity threshold.
+4. **Sign:** sign approved images and attest build provenance using short-lived OIDC credentials.
+5. **Migration gate:** validate migrations against a disposable database, then require an explicit deployment step for the target environment.
+6. **Promote:** deploy the signed image to development, then staging, then production after approval.
+7. **Verify:** run health, smoke, and post-deployment checks against the deployed environment.
+8. **Rollback:** document and automate the previous-image rollback path, with a separate procedure for backward-compatible database recovery.
+
+#### Acceptance exercises:
+- A vulnerable dependency fails the verification stage.
+- A committed test secret is detected before merge.
+- Every published image has an SBOM, digest, signature, and provenance record.
+- An unsigned or untrusted image cannot deploy to production.
+- A migration that is not compatible with rolling deployment is blocked.
+- Production requires an approval and uses environment-scoped secrets.
+- A failed smoke test automatically stops promotion and exposes the rollback instructions.
+- A previous immutable image can be redeployed without rebuilding from source.
+
+#### Security boundary:
+Pull-request workflows may build and test untrusted code, but they must not receive
+production secrets, signing credentials, or deployment permissions. Only trusted
+branches or tags should be allowed to sign artifacts and promote them to protected
+environments.
+
+---
+
 ## Summary Table
 
 | Phase | Commit message | Key learning |
@@ -537,6 +675,8 @@ frontend/nexacommerce-ui/
 | 9 | `feat(containers): add Dockerfiles, docker-compose...` | Multi-stage builds, config separation |
 | 10 | `feat(pipelines): add Azure DevOps templates...` | Reusable templates, locked restore, CI E2E |
 | 11 | `feat(frontend): add Angular placeholder...` | Aspire Mode 3 — npm process integration |
+| 12 | `feat(ci): add change-aware GitHub Actions pipeline orchestrator` | Change detection, reusable workflows, aggregate status |
+| 20 | `feat(ci): add deployment and supply-chain security controls` | Secure artifacts, deployment gates, signing, rollback |
 
 ---
 

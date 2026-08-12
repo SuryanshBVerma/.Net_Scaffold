@@ -1,0 +1,38 @@
+name: Backend Build
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        required: true
+        type: string
+      project:
+        required: true
+        type: string
+      tests:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ inputs.service }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore NexaCommerce.slnx --locked-mode
+
+      - name: Build service
+        run: dotnet build "${{ inputs.project }}" --configuration Release --no-restore --property:ContinuousIntegrationBuild=true
+
+      - name: Unit tests
+        run: dotnet test "${{ inputs.tests }}" --configuration Release --no-build --no-restore --verbosity normal

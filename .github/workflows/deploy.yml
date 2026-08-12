@@ -1,0 +1,58 @@
+name: Deploy NexaCommerce
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Protected deployment environment
+        required: true
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+      image_tag:
+        description: Immutable image tag, normally a commit SHA
+        required: true
+        type: string
+      rollback:
+        description: Roll back to the supplied image tag
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Simulate deployment to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate deployment inputs
+        run: |
+          test -n "${{ inputs.image_tag }}"
+          echo "Environment: ${{ inputs.environment }}"
+          echo "Image tag: ${{ inputs.image_tag }}"
+
+      - name: Migration gate
+        run: |
+          echo "Validating database migration compatibility for ${{ inputs.image_tag }}"
+          if [[ "${{ inputs.rollback }}" == "true" ]]; then
+            echo "Rollback requested: schema changes must already be backward compatible."
+          else
+            echo "Migration approval is required before application promotion."
+          fi
+
+      - name: Simulate promotion
+        run: |
+          echo "Would promote product-catalog:${{ inputs.image_tag }}"
+          echo "Would promote report-scheduler:${{ inputs.image_tag }}"
+          echo "No remote host, registry credentials, or deployment secrets are required."
+
+      - name: Simulate post-deployment verification
+        run: |
+          echo "Would verify /health and smoke-test the promoted environment."
+          echo "Would stop promotion and select the previous immutable tag on failure."

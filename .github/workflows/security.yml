@@ -1,0 +1,61 @@
+name: Security and Supply Chain
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+  # security-events: write
+
+jobs:
+  dependency-and-secret-scan:
+    name: Dependency and secret scans
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore locked dependencies
+        run: dotnet restore NexaCommerce.slnx --locked-mode
+
+      - name: Scan NuGet dependencies
+        run: dotnet list NexaCommerce.slnx package --vulnerable --include-transitive --format json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/nexacommerce-ui/package-lock.json
+
+      - name: Scan npm dependencies
+        working-directory: frontend/nexacommerce-ui
+        run: npm audit --audit-level=high
+
+      - name: Scan repository for secrets
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest detect --source=/repo --no-banner
+
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    needs: dependency-and-secret-scan
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate repository SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: nexacommerce-sbom.cdx.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexacommerce-sbom-${{ github.sha }}
+          path: nexacommerce-sbom.cdx.json
+          retention-days: 30
