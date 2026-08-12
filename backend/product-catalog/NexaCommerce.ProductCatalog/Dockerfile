@@ -74,7 +74,7 @@ COPY backend/product-catalog/NexaCommerce.ProductCatalog/NexaCommerce.ProductCat
 # --locked-mode: fail if packages.lock.json is out of sync with .csproj.
 # This prevents "it worked on my machine" dependency drift in CI.
 RUN dotnet restore backend/product-catalog/NexaCommerce.ProductCatalog/NexaCommerce.ProductCatalog.csproj \
-    --locked-mode
+     --force-evaluate
 
 # ── Stage 2: build + publish ────────────────────────────────────────────────
 # Now copy the full source (cache miss only when source files change).

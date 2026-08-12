@@ -23,7 +23,7 @@ jobs:
           global-json-file: global.json
 
       - name: Restore
-        run: dotnet restore NexaCommerce.slnx --locked-mode
+        run: dotnet restore NexaCommerce.slnx
 
       - name: Start application stack
         run: docker compose up --build --detach

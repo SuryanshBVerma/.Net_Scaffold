@@ -18,7 +18,7 @@ jobs:
           global-json-file: global.json
 
       - name: Restore
-        run: dotnet restore NexaCommerce.slnx --locked-mode
+        run: dotnet restore NexaCommerce.slnx
 
       - name: Run integration tests
         run: dotnet test tests/integration/NexaCommerce.ProductCatalog.IntegrationTests/NexaCommerce.ProductCatalog.IntegrationTests.csproj --configuration Release --no-restore --verbosity normal

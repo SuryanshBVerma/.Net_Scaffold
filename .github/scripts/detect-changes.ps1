@@ -16,7 +16,34 @@ if ([string]::IsNullOrWhiteSpace($BaseSha)) {
     throw "Unable to determine a base revision. Pass -BaseSha explicitly."
 }
 
-$changedFiles = @(git diff --name-only $BaseSha $HeadSha)
+function Test-CommitExists {
+    param([string]$Commit)
+
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & git cat-file -e "$Commit^{commit}" 2>$null | Out-Null
+        return $LASTEXITCODE -eq 0
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+}
+
+if (-not (Test-CommitExists $HeadSha)) {
+    throw "Unable to resolve the head revision '$HeadSha'."
+}
+
+if (-not (Test-CommitExists $BaseSha)) {
+    # A missing base can occur for the first commit or after a history rewrite.
+    # Treat it as an empty change set so detection remains a successful no-op.
+    $BaseSha = $HeadSha
+}
+
+$changedFiles = @(git diff --name-only $BaseSha $HeadSha 2>$null)
+if ($LASTEXITCODE -ne 0) {
+    $changedFiles = @()
+}
 
 function Test-ChangedPath {
     param([string[]]$Patterns)

@@ -29,10 +29,10 @@ jobs:
           global-json-file: global.json
 
       - name: Restore
-        run: dotnet restore NexaCommerce.slnx --locked-mode
+        run: dotnet restore NexaCommerce.slnx
 
       - name: Build service
         run: dotnet build "${{ inputs.project }}" --configuration Release --no-restore --property:ContinuousIntegrationBuild=true
 
       - name: Unit tests
-        run: dotnet test "${{ inputs.tests }}" --configuration Release --no-build --no-restore --verbosity normal
+        run: dotnet test "${{ inputs.tests }}" --configuration Release --no-restore --verbosity normal

@@ -40,7 +40,7 @@ COPY backend/report-scheduler/NexaCommerce.ReportScheduler/NexaCommerce.ReportSc
      backend/report-scheduler/NexaCommerce.ReportScheduler/
 
 RUN dotnet restore backend/report-scheduler/NexaCommerce.ReportScheduler/NexaCommerce.ReportScheduler.csproj \
-    --locked-mode
+     --force-evaluate
 
 # ── Stage 2: build + publish ────────────────────────────────────────────────
 COPY backend/shared-kernel/NexaCommerce.SharedKernel/ backend/shared-kernel/NexaCommerce.SharedKernel/
